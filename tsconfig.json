@@ -25,5 +25,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["src", "*.ts", "*.tsx"],
+  "exclude": ["api", "node_modules", "dist"]
 }
