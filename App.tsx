@@ -105,20 +105,17 @@ const handleAiConsult = async (customMsg?: string) => {
   setAiResponse('');
 
   try {
-    const response = await fetch(
-      'https://honey-house.vercel.app/api/gemini',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `You are the Honey Sommelier for 'Honey House'.
+    const response = await fetch('/api/gemini', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    message: `You are the Honey Sommelier for 'Honey House'.
 User language: ${lang}.
 Context: Premium Egyptian honey products.
 User question: ${messageToUse}.
 Provide a very short, professional, and helpful response.`,
-        }),
-      }
-    );
+  }),
+});
 
     const data = await response.json();
     setAiResponse(data.reply || '');
