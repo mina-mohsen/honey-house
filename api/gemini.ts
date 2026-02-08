@@ -1,11 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+export async function POST(req: Request) {
   try {
-    const { message } = req.body
+    const body = await req.json();
+    const { message } = body;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -13,17 +9,25 @@ export default async function handler(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: message }] }]
-        })
+          contents: [{ parts: [{ text: message }] }],
+        }),
       }
-    )
+    );
 
-    const data = await response.json()
+    const data = await response.json();
+
     const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response'
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      'No response from AI';
 
-    res.status(200).json({ reply })
+    return new Response(
+      JSON.stringify({ reply }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
-    res.status(500).json({ error: 'Error connecting to Gemini' })
+    return new Response(
+      JSON.stringify({ error: 'Error connecting to Gemini' }),
+      { status: 500 }
+    );
   }
 }
