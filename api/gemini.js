@@ -16,8 +16,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing message" });
     }
 
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -32,27 +32,27 @@ export default async function handler(req, res) {
             parts: [
               {
                 text:
-                  "You are a professional Egyptian honey expert. " +
-                  "Always answer clearly in Arabic. " +
-                  "Give short, helpful, safe answers about honey benefits."
+                  "You are an expert Egyptian honey consultant. " +
+                  "Answer clearly in Arabic with short, helpful advice."
               }
             ]
           },
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 256
-          },
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-          ]
+          }
         })
       }
     );
 
-    const data = await r.json();
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: "Gemini API error",
+        details: data
+      });
+    }
 
     const parts = data?.candidates?.[0]?.content?.parts;
     const reply = Array.isArray(parts)
