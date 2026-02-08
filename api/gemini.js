@@ -19,11 +19,21 @@ const r = await fetch(
 );
 
     const data = await r.json();
-    const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI";
-
-    return res.status(200).json({ reply });
-  } catch (e) {
-    return res.status(500).json({ error: "Error connecting to Gemini" });
-  }
+    if (!r.ok) {
+  return res.status(r.status).json({
+    error: "Gemini API error",
+    details: data,
+  });
 }
+
+const reply =
+  data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+if (!reply) {
+  return res.status(200).json({
+    error: "Empty response from Gemini",
+    details: data,
+  });
+}
+
+return res.status(200).json({ reply });
