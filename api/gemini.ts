@@ -22,7 +22,10 @@ export async function POST(req: Request) {
 
     return new Response(
       JSON.stringify({ reply }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
     );
   } catch (error) {
     return new Response(
