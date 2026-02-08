@@ -97,18 +97,37 @@ const App: React.FC = () => {
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  const handleAiConsult = async (customMsg?: string) => {
-    const messageToUse = customMsg || aiMessage;
-    if (!messageToUse.trim()) return;
-    setIsAiThinking(true);
-    setAiResponse('');
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `You are the Honey Sommelier for 'Honey House'. User language: ${lang}. Current context: Premium Egyptian honey products. User question: ${messageToUse}. Provide a very short, professional, and helpful response.`;
-      const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
-      setAiResponse(response.text || '');
-    } catch (e) { setAiResponse('Error connecting to AI.'); } finally { setIsAiThinking(false); }
-  };
+const handleAiConsult = async (customMsg?: string) => {
+  const messageToUse = customMsg || aiMessage;
+  if (!messageToUse.trim()) return;
+
+  setIsAiThinking(true);
+  setAiResponse('');
+
+  try {
+    const response = await fetch(
+      'https://honey-house.vercel.app/api/gemini',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `You are the Honey Sommelier for 'Honey House'.
+User language: ${lang}.
+Context: Premium Egyptian honey products.
+User question: ${messageToUse}.
+Provide a very short, professional, and helpful response.`,
+        }),
+      }
+    );
+
+    const data = await response.json();
+    setAiResponse(data.reply || '');
+  } catch (e) {
+    setAiResponse('Error connecting to AI.');
+  } finally {
+    setIsAiThinking(false);
+  }
+};
 
   const submitReview = (e: React.FormEvent) => {
     e.preventDefault();
