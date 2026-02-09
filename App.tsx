@@ -554,6 +554,22 @@ const App: React.FC = () => {
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center">
             {/* LOGO SECTION */}
+            {/* LOGO SECTION */}
+<div className="flex items-center gap-2">
+  <img 
+    src="https://imgur.com/tpBWWTy.jpeg" 
+    alt="بيت العسل Honey House"
+    className="w-12 h-12 object-contain"
+  />
+  <div className="flex flex-col">
+    <h1 className="text-xl md:text-2xl font-black text-amber-900 leading-tight">
+      بيت العسل
+    </h1>
+    <p className="text-xs text-amber-700 font-bold hidden md:block">
+      Honey House
+    </p>
+  </div>
+</div>
             <div className="flex items-center gap-2">
               <div className="w-12 h-12 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
                 <div className="text-white font-black text-lg md:text-xl text-center leading-tight">
