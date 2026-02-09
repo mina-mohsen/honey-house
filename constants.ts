@@ -20,8 +20,8 @@ export const PRODUCTS: ProductExtended[] = [
     benefitsAr: ['سهل الاستخدام', 'غني بالأنزيمات'],
     benefitsEn: ['Mess-free', 'Enzyme Rich'],
     prices: [
-      { id: 'squeeze_1_4', sizeAr: '¼ كيلو', sizeEn: '¼ KG', price: 25 },
-      { id: 'squeeze_1_2', sizeAr: '½ كيلو', sizeEn: '½ KG', price: 45 },
+      { id: 'squeeze_1_4', sizeAr: '¼ كيلو', sizeEn: '¼ KG', price: 30 },
+      { id: 'squeeze_1_2', sizeAr: '½ كيلو', sizeEn: '½ KG', price: 50 },
     ]
   },
   {
