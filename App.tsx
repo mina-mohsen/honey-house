@@ -341,15 +341,23 @@ const App: React.FC = () => {
     setAiResponse("");
 
     try {
-      setTimeout(() => {
-        setAiResponse(lang === "ar" 
-          ? "عسلنا الطبيعي يتميز بالنقاء والجودة العالية. يأتي مباشرة من المناحل المصرية بدون أي إضافات. غني بمضادات الأكسدة والأنزيمات المفيدة للصحة. مثالي لتقوية المناعة وتحسين الهضم. يمكن استخدامه كمحلي طبيعي بديل للسكر. ينصح بتخزينه في درجة حرارة الغرفة بعيداً عن الشمس."
-          : "Our natural honey is characterized by purity and high quality. It comes directly from Egyptian apiaries without any additives. Rich in antioxidants and enzymes beneficial for health. Ideal for strengthening immunity and improving digestion. Can be used as a natural sweetener alternative to sugar. Recommended to store at room temperature away from sunlight."
-        );
-        setIsAiThinking(false);
-      }, 1500);
+      // Send request to Gemini AI
+      const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `You are a professional honey expert.
+Explain in detail (6–10 sentences).
+User language: ${lang}.
+Question: ${aiMessage}`,
+        }),
+      });
+
+      const data = await res.json();
+      setAiResponse(data.reply || "");
     } catch {
       setAiResponse(lang === "ar" ? "خطأ في الاتصال بالذكاء الاصطناعي." : "Error connecting to AI.");
+    } finally {
       setIsAiThinking(false);
     }
   };
@@ -553,7 +561,7 @@ const App: React.FC = () => {
       <header className="sticky top-0 bg-white/95 backdrop-blur-sm shadow-md z-40">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center">
-            {/* LOGO SECTION - UPDATED */}
+            {/* LOGO SECTION */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500 shadow-lg">
@@ -616,7 +624,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* MOBILE NAVIGATION - UPDATED */}
+          {/* MOBILE NAVIGATION */}
           <nav className="flex overflow-x-auto gap-2 mt-3 pb-2 no-scrollbar">
             <button
               onClick={() => {
