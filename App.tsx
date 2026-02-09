@@ -553,41 +553,29 @@ const App: React.FC = () => {
       <header className="sticky top-0 bg-white/95 backdrop-blur-sm shadow-md z-40">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center">
-{/* LOGO */}
-<div className="flex items-center gap-2">
-  <img 
-    src="https://imgur.com/tpBWWTy.jpeg" 
-    alt="بيت العسل Honey House"
-    className="w-12 h-12 object-contain"
-  />
-  <div className="flex flex-col">
-    <h1 className="text-xl md:text-2xl font-black text-amber-900 leading-tight">
-      بيت العسل
-    </h1>
-    <p className="text-xs text-amber-700 font-bold hidden md:block">
-      Honey House
-    </p>
-  </div>
-</div>
-            <div className="flex items-center gap-2">
-              <div className="w-12 h-12 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
-                <div className="text-white font-black text-lg md:text-xl text-center leading-tight">
-                  <div className="text-sm">🍯</div>
-                  <div className="text-[10px] md:text-xs">بيت العسل</div>
+            {/* LOGO SECTION - UPDATED */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500 shadow-lg">
+                  <img 
+                    src="https://imgur.com/tpBWWTy.jpeg" 
+                    alt="بيت العسل Honey House"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-              </div>
-              <div className="flex flex-col">
-                <h1 className="text-xl md:text-2xl font-black text-amber-900 leading-tight">
-                  بيت العسل
-                </h1>
-                <p className="text-xs text-amber-700 font-bold hidden md:block">
-                  Honey House
-                </p>
+                <div className="flex flex-col">
+                  <h1 className="text-xl md:text-2xl font-black text-amber-900 leading-tight">
+                    بيت العسل
+                  </h1>
+                  <p className="text-xs text-amber-700 font-bold">
+                    Honey House
+                  </p>
+                </div>
               </div>
             </div>
             
             <div className="flex items-center gap-2">
-              {/* Admin Button */}
+              {/* Admin Button - HIDDEN FROM CUSTOMERS */}
               {isAdmin ? (
                 <div className="flex items-center gap-2">
                   <span className="hidden sm:inline text-sm bg-purple-100 text-purple-800 px-3 py-1 rounded-full">
@@ -601,13 +589,8 @@ const App: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => setShowAdminLogin(true)}
-                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 text-sm hidden sm:block"
-                  title={lang === "ar" ? "تسجيل دخول المدير" : "Admin Login"}
-                >
-                  👑
-                </button>
+                // Completely hidden from customers - only accessible via direct URL or secret
+                <></>
               )}
               
               {/* Cart Button */}
@@ -633,7 +616,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* MOBILE NAVIGATION */}
+          {/* MOBILE NAVIGATION - UPDATED */}
           <nav className="flex overflow-x-auto gap-2 mt-3 pb-2 no-scrollbar">
             <button
               onClick={() => {
@@ -672,17 +655,8 @@ const App: React.FC = () => {
               <span className="text-sm">{lang === "ar" ? "واتساب" : "WhatsApp"}</span>
             </a>
             
-            {/* Mobile Admin Login */}
-            {!isAdmin && (
-              <button
-                onClick={() => setShowAdminLogin(true)}
-                className="px-4 py-2 bg-purple-100 text-purple-800 rounded-full font-bold whitespace-nowrap flex items-center gap-2"
-                title={lang === "ar" ? "تسجيل دخول المدير" : "Admin Login"}
-              >
-                <span>👑</span>
-                <span className="text-sm">{lang === "ar" ? "مدير" : "Admin"}</span>
-              </button>
-            )}
+            {/* Admin Login Button - REMOVED FROM MOBILE NAV */}
+            {/* Admin access is completely hidden from customers */}
           </nav>
         </div>
       </header>
@@ -1166,7 +1140,7 @@ const App: React.FC = () => {
                 </form>
               )}
 
-              {/* Admin Controls */}
+              {/* Admin Controls - Only shown when admin is logged in */}
               {isAdmin && reviews.length > 0 && (
                 <div className="mb-4 p-4 bg-purple-50 rounded-xl border border-purple-200">
                   <div className="flex items-center gap-2 mb-3">
@@ -1249,7 +1223,7 @@ const App: React.FC = () => {
                             (review.ar?.comment || review.en?.comment)}
                         </p>
                         
-                        {/* Admin Actions */}
+                        {/* Admin Actions - Only shown when admin is logged in */}
                         {isAdmin && (
                           <div className="flex flex-wrap gap-2 pt-3 border-t border-amber-100">
                             <button
