@@ -1,5 +1,4 @@
-[file name]: App.tsx
-[file content begin]
+
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Language, CartItem } from "./types";
 import {
