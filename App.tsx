@@ -1330,7 +1330,7 @@ const App: React.FC = () => {
 
       {/* ================= FOOTER ================= */}
       <footer className="bg-amber-900 text-white py-8 mt-8">
-        <div className="container mx-auto px-4">
+
           {/* LOGO */}
 <div className="flex items-center gap-2">
   <img 
@@ -1347,15 +1347,8 @@ const App: React.FC = () => {
     </p>
   </div>
 </div>
-          {/*  <div className="text-center">
-            <div className="flex justify-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
-                <div className="text-white font-black text-center">
-                  <div className="text-xl">🍯</div>
-                  <div className="text-xs mt-1">بيت العسل</div>
-                </div>
-              </div> */}
-            </div>
+
+
             
             <h3 className="text-xl font-black mb-2">بيت العسل | Honey House</h3>
             <p className="opacity-80 mb-6 text-sm md:text-base">
