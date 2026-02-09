@@ -403,7 +403,7 @@ Rules:
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <MiniStat icon="⭐" val={reviewsStats.avg ? String(reviewsStats.avg) : '—'} label={lang === 'ar' ? 'متوسط التقييم' : 'Avg Rating'} onClick={() => togglePanel('reviews')} />
               <MiniStat icon="👥" val={reviewsStats.count ? String(reviewsStats.count) : '0'} label={lang === 'ar' ? 'عدد المقيمين' : 'Reviewers'} onClick={() => togglePanel('reviews')} />
-              <MiniStat icon="🚛" val="24h" label={lang === 'ar' ? 'توصيل' : 'Delivery'} />
+              <MiniStat icon="🚛" val="24h-48h" label={lang === 'ar' ? 'توصيل' : 'Delivery'} />
               <MiniStat icon="✅" val="100%" label={lang === 'ar' ? 'طبيعي' : 'Natural'} />
             </div>
           </div>
