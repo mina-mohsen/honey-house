@@ -12,7 +12,7 @@ import {
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>("ar");
-  
+
   /* ================= Admin Authentication ================= */
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -29,7 +29,7 @@ const App: React.FC = () => {
   });
   const [showCartNotification, setShowCartNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
-  
+
   // Refs for form validation focus
   const nameInputRef = useRef<HTMLInputElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +51,7 @@ const App: React.FC = () => {
     rating: 5,
     comment: "",
   });
-  
+
   /* ================= Review Management ================= */
   const [editingReview, setEditingReview] = useState<any>(null);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -72,20 +72,18 @@ const App: React.FC = () => {
     const loadReviews = () => {
       setIsLoadingReviews(true);
       try {
-        const savedReviews = localStorage.getItem('honeyhouse_reviews');
+        const savedReviews = localStorage.getItem("honeyhouse_reviews");
         if (savedReviews) {
           const parsedReviews = JSON.parse(savedReviews);
           if (parsedReviews.length > 0) {
             setReviews(parsedReviews);
           } else {
-            // Use mock reviews if localStorage is empty
             setReviews(MOCK_REVIEWS);
-            localStorage.setItem('honeyhouse_reviews', JSON.stringify(MOCK_REVIEWS));
+            localStorage.setItem("honeyhouse_reviews", JSON.stringify(MOCK_REVIEWS));
           }
         } else {
-          // First time user, use mock reviews
           setReviews(MOCK_REVIEWS);
-          localStorage.setItem('honeyhouse_reviews', JSON.stringify(MOCK_REVIEWS));
+          localStorage.setItem("honeyhouse_reviews", JSON.stringify(MOCK_REVIEWS));
         }
       } catch (error) {
         console.error("Failed to load reviews:", error);
@@ -102,7 +100,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (reviews.length > 0) {
       try {
-        localStorage.setItem('honeyhouse_reviews', JSON.stringify(reviews));
+        localStorage.setItem("honeyhouse_reviews", JSON.stringify(reviews));
       } catch (error) {
         console.error("Failed to save reviews:", error);
       }
@@ -122,20 +120,20 @@ const App: React.FC = () => {
   /* Calculate total price */
   const totalPrice = useMemo(() => {
     return cartItems.reduce((total, item) => {
-      const product = PRODUCTS.find(p => p.id === item.productId);
+      const product = PRODUCTS.find((p) => p.id === item.productId);
       if (!product) return total;
-      
-      const price = product.prices.find(p => p.id === item.priceId);
+
+      const price = product.prices.find((p) => p.id === item.priceId);
       if (!price) return total;
-      
-      return total + (price.price * item.quantity);
+
+      return total + price.price * item.quantity;
     }, 0);
   }, [cartItems]);
 
   /* Calculate average rating */
   const avgRating = useMemo(() => {
     if (!reviews.length) return "0.0";
-    const approvedReviews = reviews.filter(r => r.approved !== false);
+    const approvedReviews = reviews.filter((r) => r.approved !== false);
     if (!approvedReviews.length) return "0.0";
     return (
       approvedReviews.reduce((a, r) => a + (r.rating || 0), 0) / approvedReviews.length
@@ -164,7 +162,7 @@ const App: React.FC = () => {
 
   /* ================= Review Management Functions ================= */
   const startEditReview = (review: any) => {
-    setEditingReview({...review});
+    setEditingReview({ ...review });
     setShowEditForm(true);
     setShowReviewForm(false);
   };
@@ -175,15 +173,15 @@ const App: React.FC = () => {
       return;
     }
 
-    setReviews(prev => 
-      prev.map(review => 
-        review.id === editingReview.id 
-          ? { 
-              ...editingReview, 
+    setReviews((prev) =>
+      prev.map((review) =>
+        review.id === editingReview.id
+          ? {
+              ...editingReview,
               name: editingReview.name.trim(),
               comment: editingReview.comment.trim(),
-              updatedAt: new Date().toISOString()
-            } 
+              updatedAt: new Date().toISOString(),
+            }
           : review
       )
     );
@@ -196,49 +194,33 @@ const App: React.FC = () => {
 
   const deleteReview = (reviewId: string) => {
     if (window.confirm(lang === "ar" ? "هل أنت متأكد من حذف هذا التقييم؟" : "Are you sure you want to delete this review?")) {
-      setReviews(prev => prev.filter(review => review.id !== reviewId));
+      setReviews((prev) => prev.filter((review) => review.id !== reviewId));
       setAdminMessage(lang === "ar" ? "تم حذف التقييم بنجاح" : "Review deleted successfully");
       setTimeout(() => setAdminMessage(""), 3000);
     }
   };
 
   const approveReview = (reviewId: string) => {
-    setReviews(prev => 
-      prev.map(review => 
-        review.id === reviewId 
-          ? { ...review, approved: true, approvedAt: new Date().toISOString() } 
-          : review
-      )
+    setReviews((prev) =>
+      prev.map((review) => (review.id === reviewId ? { ...review, approved: true, approvedAt: new Date().toISOString() } : review))
     );
     setAdminMessage(lang === "ar" ? "تم تفعيل التقييم" : "Review approved");
     setTimeout(() => setAdminMessage(""), 3000);
   };
 
   const unapproveReview = (reviewId: string) => {
-    setReviews(prev => 
-      prev.map(review => 
-        review.id === reviewId 
-          ? { ...review, approved: false } 
-          : review
-      )
-    );
+    setReviews((prev) => prev.map((review) => (review.id === reviewId ? { ...review, approved: false } : review)));
     setAdminMessage(lang === "ar" ? "تم إلغاء تفعيل التقييم" : "Review unapproved");
     setTimeout(() => setAdminMessage(""), 3000);
   };
 
   /* ================= Cart Functions ================= */
   const addToCart = (productId: string, priceId: string, productName: string, sizeName: string) => {
-    const existingItem = cartItems.find(
-      item => item.productId === productId && item.priceId === priceId
-    );
+    const existingItem = cartItems.find((item) => item.productId === productId && item.priceId === priceId);
 
     if (existingItem) {
-      setCartItems(prev =>
-        prev.map(item =>
-          item.id === existingItem.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
+      setCartItems((prev) =>
+        prev.map((item) => (item.id === existingItem.id ? { ...item, quantity: item.quantity + 1 } : item))
       );
       setNotificationMessage(`${lang === "ar" ? "تم زيادة الكمية لـ" : "Increased quantity for"} ${productName} (${sizeName})`);
     } else {
@@ -248,10 +230,10 @@ const App: React.FC = () => {
         priceId,
         quantity: 1,
       };
-      setCartItems(prev => [...prev, newItem]);
+      setCartItems((prev) => [...prev, newItem]);
       setNotificationMessage(`${lang === "ar" ? "تم إضافة" : "Added"} ${productName} (${sizeName}) ${lang === "ar" ? "إلى السلة" : "to cart"}`);
     }
-    
+
     setShowCartNotification(true);
     setShowOrderForm(true);
   };
@@ -261,21 +243,14 @@ const App: React.FC = () => {
       removeFromCart(itemId);
       return;
     }
-    
-    setCartItems(prev =>
-      prev.map(item =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
-      )
-    );
+    setCartItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item)));
   };
 
   const removeFromCart = (itemId: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== itemId));
+    setCartItems((prev) => prev.filter((item) => item.id !== itemId));
   };
 
-  const clearCart = () => {
-    setCartItems([]);
-  };
+  const clearCart = () => setCartItems([]);
 
   /* ================= Send Order via WhatsApp ================= */
   const sendOrderViaWhatsApp = () => {
@@ -284,13 +259,13 @@ const App: React.FC = () => {
       nameInputRef.current?.focus();
       return;
     }
-    
+
     if (!orderForm.phone.trim()) {
       alert(lang === "ar" ? "الرجاء إدخال رقم الهاتف" : "Please enter phone number");
       phoneInputRef.current?.focus();
       return;
     }
-    
+
     if (!orderForm.location.trim()) {
       alert(lang === "ar" ? "الرجاء إدخال عنوان التوصيل" : "Please enter delivery address");
       locationInputRef.current?.focus();
@@ -302,31 +277,31 @@ const App: React.FC = () => {
       return;
     }
 
-    let message = `*${lang === "ar" ? "طلب جديد من موقع بيت العسل" : "New Order from Honey House"}*\\n\\n`;
-    message += `*${t.whatsappName}* ${orderForm.name}\\n`;
-    message += `*${t.whatsappPhone}* ${orderForm.phone}\\n`;
-    message += `*${t.whatsappLocation}* ${orderForm.location}\\n\\n`;
-    message += `*${lang === "ar" ? "المنتجات المطلوبة" : "Order Items"}:*\\n`;
+    let message = `*${lang === "ar" ? "طلب جديد من موقع بيت العسل" : "New Order from Honey House"}*\n\n`;
+    message += `*${t.whatsappName}* ${orderForm.name}\n`;
+    message += `*${t.whatsappPhone}* ${orderForm.phone}\n`;
+    message += `*${t.whatsappLocation}* ${orderForm.location}\n\n`;
+    message += `*${lang === "ar" ? "المنتجات المطلوبة" : "Order Items"}:*\n`;
 
-    cartItems.forEach(item => {
-      const product = PRODUCTS.find(p => p.id === item.productId);
+    cartItems.forEach((item) => {
+      const product = PRODUCTS.find((p) => p.id === item.productId);
       if (product) {
-        const price = product.prices.find(p => p.id === item.priceId);
+        const price = product.prices.find((p) => p.id === item.priceId);
         if (price) {
-          message += `- ${lang === "ar" ? product.titleAr : product.titleEn} (${lang === "ar" ? price.sizeAr : price.sizeEn}) x${item.quantity}: ${price.price * item.quantity} ${t.currency}\\n`;
+          message += `- ${lang === "ar" ? product.titleAr : product.titleEn} (${lang === "ar" ? price.sizeAr : price.sizeEn}) x${item.quantity}: ${price.price * item.quantity} ${t.currency}\n`;
         }
       }
     });
 
-    message += `\\n*${t.whatsappTotal}* ${totalPrice} ${t.currency}`;
-    
+    message += `\n*${t.whatsappTotal}* ${totalPrice} ${t.currency}`;
+
     const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-    
+    window.open(whatsappUrl, "_blank");
+
     clearCart();
     setShowOrderForm(false);
     setOrderForm({ name: "", phone: "", location: "" });
-    
+
     alert(lang === "ar" ? "تم إرسال الطلب بنجاح! سنتواصل معك قريباً." : "Order sent successfully! We'll contact you soon.");
   };
 
@@ -336,12 +311,11 @@ const App: React.FC = () => {
       alert(lang === "ar" ? "الرجاء كتابة سؤال" : "Please enter a question");
       return;
     }
-    
+
     setIsAiThinking(true);
     setAiResponse("");
 
     try {
-      // Send request to Gemini AI
       const res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -362,7 +336,7 @@ Question: ${aiMessage}`,
     }
   };
 
-  /* ================= Submit Review ================= */
+  /* ================= Submit Review (SEND TO WHATSAPP) ================= */
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -371,41 +345,44 @@ Question: ${aiMessage}`,
       return;
     }
 
+    // 1) Create review object (for local view)
+    const reviewObj = {
+      id: `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: newReview.name.trim(),
+      rating: newReview.rating,
+      comment: newReview.comment.trim(),
+      date: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      approved: true,
+    };
+
+    // 2) Add locally (same behaviour you already have)
+    const updatedReviews = [reviewObj, ...reviews];
+    setReviews(updatedReviews);
     try {
-      const newReviewWithId = {
-        id: `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: newReview.name.trim(),
-        rating: newReview.rating,
-        comment: newReview.comment.trim(),
-        lang: lang,
-        date: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        approved: true, // Auto-approve reviews
-      };
+      localStorage.setItem("honeyhouse_reviews", JSON.stringify(updatedReviews));
+    } catch {}
 
-      // Add to reviews array
-      const updatedReviews = [newReviewWithId, ...reviews];
-      setReviews(updatedReviews);
-      
-      // Save to localStorage immediately
-      localStorage.setItem('honeyhouse_reviews', JSON.stringify(updatedReviews));
-      
-      // Reset form
-      setShowReviewForm(false);
-      setNewReview({ name: "", rating: 5, comment: "" });
+    // 3) Send to WhatsApp (NEW)
+    const stars = "⭐".repeat(Math.max(1, Math.min(5, newReview.rating)));
+    const msg =
+      `*${lang === "ar" ? "تقييم جديد - موقع بيت العسل" : "New Review - Honey House"}*\n\n` +
+      `*${lang === "ar" ? "الاسم" : "Name"}:* ${reviewObj.name}\n` +
+      `*${lang === "ar" ? "التقييم" : "Rating"}:* ${reviewObj.rating}/5 ${stars}\n` +
+      `*${lang === "ar" ? "التعليق" : "Comment"}:*\n${reviewObj.comment}\n\n` +
+      `*${lang === "ar" ? "التاريخ" : "Date"}:* ${new Date(reviewObj.date).toLocaleString(lang === "ar" ? "ar-EG" : "en-US")}`;
 
-      // Show success message
-      alert(lang === "ar" ? "تم إرسال تقييمك بنجاح! شكراً لك." : "Review submitted successfully! Thank you.");
-      
-    } catch (error) {
-      console.error('Error submitting review:', error);
-      alert(lang === "ar" ? "حدث خطأ أثناء إرسال التقييم. يرجى المحاولة مرة أخرى." : "Error submitting review. Please try again.");
-    }
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
+
+    // 4) Reset form
+    setShowReviewForm(false);
+    setNewReview({ name: "", rating: 5, comment: "" });
+
+    alert(lang === "ar" ? "تم إرسال تقييمك على واتساب ✅ شكراً لك!" : "Your review was sent via WhatsApp ✅ Thank you!");
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white text-slate-900 font-cairo">
-      
       {/* ================= ADMIN MESSAGE ================= */}
       {adminMessage && (
         <div className="fixed top-20 right-4 left-4 md:left-auto md:right-4 z-50 animate-slide-in">
@@ -425,9 +402,7 @@ Question: ${aiMessage}`,
             <span className="text-2xl">✅</span>
             <div>
               <p className="font-bold">{notificationMessage}</p>
-              <p className="text-sm opacity-90">
-                {lang === "ar" ? "تمت الإضافة إلى سلة الطلبات" : "Added to shopping cart"}
-              </p>
+              <p className="text-sm opacity-90">{lang === "ar" ? "تمت الإضافة إلى سلة الطلبات" : "Added to shopping cart"}</p>
             </div>
           </div>
         </div>
@@ -437,31 +412,22 @@ Question: ${aiMessage}`,
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-black text-amber-900 mb-4">
-              {lang === "ar" ? "تسجيل الدخول كمدير" : "Admin Login"}
-            </h3>
+            <h3 className="text-xl font-black text-amber-900 mb-4">{lang === "ar" ? "تسجيل الدخول كمدير" : "Admin Login"}</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {lang === "ar" ? "كلمة المرور:" : "Password:"}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "كلمة المرور:" : "Password:"}</label>
                 <input
                   type="password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   placeholder={lang === "ar" ? "أدخل كلمة المرور" : "Enter password"}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                  onKeyPress={(e) => e.key === 'Enter' && handleAdminLogin()}
+                  onKeyPress={(e) => e.key === "Enter" && handleAdminLogin()}
                 />
               </div>
-              <div className="text-xs text-gray-500 mb-4">
-                {lang === "ar" ? "كلمة المرور الافتراضية: honeyadmin123" : "Default password: honeyadmin123"}
-              </div>
+              <div className="text-xs text-gray-500 mb-4">{lang === "ar" ? "كلمة المرور الافتراضية: honeyadmin123" : "Default password: honeyadmin123"}</div>
               <div className="flex gap-3">
-                <button
-                  onClick={handleAdminLogin}
-                  className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600"
-                >
+                <button onClick={handleAdminLogin} className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600">
                   {lang === "ar" ? "تسجيل الدخول" : "Login"}
                 </button>
                 <button
@@ -483,31 +449,25 @@ Question: ${aiMessage}`,
       {showEditForm && editingReview && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-black text-amber-900 mb-4">
-              {lang === "ar" ? "تعديل التقييم" : "Edit Review"}
-            </h3>
+            <h3 className="text-xl font-black text-amber-900 mb-4">{lang === "ar" ? "تعديل التقييم" : "Edit Review"}</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {lang === "ar" ? "الاسم:" : "Name:"}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "الاسم:" : "Name:"}</label>
                 <input
                   type="text"
                   value={editingReview.name}
-                  onChange={(e) => setEditingReview({...editingReview, name: e.target.value})}
+                  onChange={(e) => setEditingReview({ ...editingReview, name: e.target.value })}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {lang === "ar" ? "التقييم:" : "Rating:"}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "التقييم:" : "Rating:"}</label>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
-                      onClick={() => setEditingReview({...editingReview, rating: star})}
-                      className={`text-3xl ${star <= editingReview.rating ? 'text-amber-500' : 'text-gray-300'}`}
+                      onClick={() => setEditingReview({ ...editingReview, rating: star })}
+                      className={`text-3xl ${star <= editingReview.rating ? "text-amber-500" : "text-gray-300"}`}
                     >
                       ⭐
                     </button>
@@ -515,21 +475,16 @@ Question: ${aiMessage}`,
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {lang === "ar" ? "التعليق:" : "Comment:"}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "التعليق:" : "Comment:"}</label>
                 <textarea
                   value={editingReview.comment}
-                  onChange={(e) => setEditingReview({...editingReview, comment: e.target.value})}
+                  onChange={(e) => setEditingReview({ ...editingReview, comment: e.target.value })}
                   rows={4}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 />
               </div>
               <div className="flex gap-3">
-                <button
-                  onClick={saveEditReview}
-                  className="flex-1 px-4 py-3 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600"
-                >
+                <button onClick={saveEditReview} className="flex-1 px-4 py-3 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600">
                   {lang === "ar" ? "حفظ التعديلات" : "Save Changes"}
                 </button>
                 <button
@@ -551,9 +506,13 @@ Question: ${aiMessage}`,
       <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-center py-3 font-black text-sm md:text-base">
         <div className="flex items-center justify-center gap-2">
           <span>🚚</span>
-          <span>{lang === "ar" ? "توصيل خلال" : "Delivery within"} <b>24h – 48h</b></span>
+          <span>
+            {lang === "ar" ? "توصيل خلال" : "Delivery within"} <b>24h – 48h</b>
+          </span>
           <span className="hidden sm:inline"> | </span>
-          <span className="block sm:inline">{lang === "ar" ? "توصيل مجاني فوق" : "Free delivery over"} <b>{DELIVERY_INFO.FREE_THRESHOLD} {t.currency}</b></span>
+          <span className="block sm:inline">
+            {lang === "ar" ? "توصيل مجاني فوق" : "Free delivery over"} <b>{DELIVERY_INFO.FREE_THRESHOLD} {t.currency}</b>
+          </span>
         </div>
       </div>
 
@@ -565,47 +524,34 @@ Question: ${aiMessage}`,
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500 shadow-lg">
-                  <img 
-                    src="https://imgur.com/tpBWWTy.jpeg" 
+                  <img
+                    src="https://imgur.com/tpBWWTy.jpeg"
                     alt="بيت العسل Honey House"
                     className="w-full h-full object-cover"
                   />
                 </div>
                 <div className="flex flex-col">
-                  <h1 className="text-xl md:text-2xl font-black text-amber-900 leading-tight">
-                    بيت العسل
-                  </h1>
-                  <p className="text-xs text-amber-700 font-bold">
-                    Honey House
-                  </p>
+                  <h1 className="text-xl md:text-2xl font-black text-amber-900 leading-tight">بيت العسل</h1>
+                  <p className="text-xs text-amber-700 font-bold">Honey House</p>
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2">
-              {/* Admin Button - HIDDEN FROM CUSTOMERS */}
               {isAdmin ? (
                 <div className="flex items-center gap-2">
                   <span className="hidden sm:inline text-sm bg-purple-100 text-purple-800 px-3 py-1 rounded-full">
                     👑 {lang === "ar" ? "مدير" : "Admin"}
                   </span>
-                  <button
-                    onClick={handleAdminLogout}
-                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 text-sm"
-                  >
+                  <button onClick={handleAdminLogout} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 text-sm">
                     {lang === "ar" ? "خروج" : "Logout"}
                   </button>
                 </div>
               ) : (
-                // Completely hidden from customers - only accessible via direct URL or secret
                 <></>
               )}
-              
-              {/* Cart Button */}
-              <button
-                onClick={() => setShowOrderForm(!showOrderForm)}
-                className="relative p-2 bg-amber-100 rounded-full hover:bg-amber-200 transition-colors"
-              >
+
+              <button onClick={() => setShowOrderForm(!showOrderForm)} className="relative p-2 bg-amber-100 rounded-full hover:bg-amber-200 transition-colors">
                 <span className="text-xl">🛒</span>
                 {cartItems.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
@@ -613,8 +559,7 @@ Question: ${aiMessage}`,
                   </span>
                 )}
               </button>
-              
-              {/* Language Button */}
+
               <button
                 onClick={() => setLang(lang === "ar" ? "en" : "ar")}
                 className="px-3 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition-colors text-sm"
@@ -631,28 +576,28 @@ Question: ${aiMessage}`,
                 setOpenProducts(!openProducts);
                 setOpenReviews(false);
               }}
-              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${openProducts ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-900'}`}
+              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${openProducts ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"}`}
             >
               <span>🍯</span>
               <span className="text-sm">{lang === "ar" ? "المنتجات" : "Products"}</span>
             </button>
-            
+
             <button
               onClick={() => {
                 setOpenReviews(!openReviews);
                 setOpenProducts(false);
               }}
-              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${openReviews ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-900'}`}
+              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${openReviews ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"}`}
             >
               <span>⭐</span>
               <span className="text-sm">{lang === "ar" ? "التقييمات" : "Reviews"}</span>
               {reviews.length > 0 && (
-                <span className={`text-xs px-2 py-1 rounded-full ${openReviews ? 'bg-white text-amber-500' : 'bg-amber-500 text-white'}`}>
-                  {reviews.filter(r => r.approved !== false).length}
+                <span className={`text-xs px-2 py-1 rounded-full ${openReviews ? "bg-white text-amber-500" : "bg-amber-500 text-white"}`}>
+                  {reviews.filter((r) => r.approved !== false).length}
                 </span>
               )}
             </button>
-            
+
             <a
               href={`https://wa.me/${WHATSAPP_NUMBER}`}
               target="_blank"
@@ -662,102 +607,71 @@ Question: ${aiMessage}`,
               <span>📱</span>
               <span className="text-sm">{lang === "ar" ? "واتساب" : "WhatsApp"}</span>
             </a>
-            
-            {/* Admin Login Button - REMOVED FROM MOBILE NAV */}
-            {/* Admin access is completely hidden from customers */}
           </nav>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-8">
-        
         {/* ================= ORDER FORM SECTION ================= */}
         {(showOrderForm || cartItems.length > 0) && (
           <section className="animate-slide-in">
             <div className="bg-white rounded-2xl shadow-xl border border-amber-200 overflow-hidden">
               <div className="p-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-black flex items-center gap-2">
-                    🛒 {lang === "ar" ? "سلة الطلبات" : "Shopping Cart"}
-                  </h2>
+                  <h2 className="text-xl font-black flex items-center gap-2">🛒 {lang === "ar" ? "سلة الطلبات" : "Shopping Cart"}</h2>
                   <div className="flex items-center gap-2">
                     {cartItems.length > 0 && (
-                      <button
-                        onClick={clearCart}
-                        className="px-3 py-1 bg-white/20 text-white rounded-lg hover:bg-white/30 text-sm"
-                      >
+                      <button onClick={clearCart} className="px-3 py-1 bg-white/20 text-white rounded-lg hover:bg-white/30 text-sm">
                         {lang === "ar" ? "إفراغ السلة" : "Clear All"}
                       </button>
                     )}
-                    <button
-                      onClick={() => setShowOrderForm(false)}
-                      className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30"
-                    >
+                    <button onClick={() => setShowOrderForm(false)} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30">
                       ✕
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Cart Items */}
               <div className="p-4 max-h-96 overflow-y-auto">
                 {cartItems.length === 0 ? (
                   <div className="text-center py-8">
                     <div className="text-5xl mb-4">🛒</div>
-                    <p className="text-gray-500 text-lg font-bold">
-                      {lang === "ar" ? "سلة التسوق فارغة" : "Your cart is empty"}
-                    </p>
-                    <p className="text-gray-400 mt-2">
-                      {lang === "ar" ? "أضف منتجات من قسم المنتجات" : "Add products from the products section"}
-                    </p>
+                    <p className="text-gray-500 text-lg font-bold">{lang === "ar" ? "سلة التسوق فارغة" : "Your cart is empty"}</p>
+                    <p className="text-gray-400 mt-2">{lang === "ar" ? "أضف منتجات من قسم المنتجات" : "Add products from the products section"}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {cartItems.map((item) => {
-                      const product = PRODUCTS.find(p => p.id === item.productId);
-                      const price = product?.prices.find(p => p.id === item.priceId);
-                      
+                      const product = PRODUCTS.find((p) => p.id === item.productId);
+                      const price = product?.prices.find((p) => p.id === item.priceId);
                       if (!product || !price) return null;
 
                       return (
                         <div key={item.id} className="bg-amber-50 rounded-xl p-3 border border-amber-100">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
-                              <h3 className="font-bold text-amber-900 text-sm md:text-base">
-                                {lang === "ar" ? product.titleAr : product.titleEn}
-                              </h3>
+                              <h3 className="font-bold text-amber-900 text-sm md:text-base">{lang === "ar" ? product.titleAr : product.titleEn}</h3>
                               <p className="text-xs text-gray-600">
                                 {lang === "ar" ? price.sizeAr : price.sizeEn} • {price.price} {t.currency}
                               </p>
                             </div>
-                            
+
                             <div className="flex items-center gap-3">
                               <div className="flex items-center gap-2 bg-white rounded-full px-2 py-1">
-                                <button
-                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                  className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-                                >
+                                <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200">
                                   −
                                 </button>
                                 <span className="font-bold w-6 text-center">{item.quantity}</span>
-                                <button
-                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                  className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-                                >
+                                <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200">
                                   +
                                 </button>
                               </div>
-                              
+
                               <div className="text-right min-w-20">
-                                <p className="font-bold text-green-600">
-                                  {price.price * item.quantity} {t.currency}
-                                </p>
+                                <p className="font-bold text-green-600">{price.price * item.quantity} {t.currency}</p>
                               </div>
-                              
-                              <button
-                                onClick={() => removeFromCart(item.id)}
-                                className="text-red-500 hover:text-red-700 p-1"
-                              >
+
+                              <button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-700 p-1">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -771,14 +685,13 @@ Question: ${aiMessage}`,
                 )}
               </div>
 
-              {/* Order Summary */}
               {cartItems.length > 0 && (
                 <div className="border-t border-amber-100 p-4 bg-amber-50">
                   <div className="flex justify-between items-center mb-3">
                     <span className="font-bold text-amber-900">{lang === "ar" ? "الإجمالي" : "Subtotal"}:</span>
                     <span className="font-bold text-xl text-green-600">{totalPrice} {t.currency}</span>
                   </div>
-                  
+
                   {totalPrice >= DELIVERY_INFO.FREE_THRESHOLD ? (
                     <div className="flex items-center gap-2 p-3 bg-green-100 text-green-800 rounded-lg mb-4">
                       <span className="text-xl">🎉</span>
@@ -788,62 +701,56 @@ Question: ${aiMessage}`,
                     <div className="flex items-center gap-2 p-3 bg-amber-100 text-amber-800 rounded-lg mb-4">
                       <span className="text-xl">📦</span>
                       <span className="text-sm">
-                        {lang === "ar" ? "أضف" : "Add"} <span className="font-bold">{DELIVERY_INFO.FREE_THRESHOLD - totalPrice} {t.currency}</span> {lang === "ar" ? "أخرى للحصول على توصيل مجاني" : "more for free delivery"}
+                        {lang === "ar" ? "أضف" : "Add"} <span className="font-bold">{DELIVERY_INFO.FREE_THRESHOLD - totalPrice} {t.currency}</span>{" "}
+                        {lang === "ar" ? "أخرى للحصول على توصيل مجاني" : "more for free delivery"}
                       </span>
                     </div>
                   )}
 
-                  {/* Order Form */}
                   <div className="space-y-4">
                     <h3 className="font-bold text-amber-900 flex items-center gap-2">
                       <span>📝</span>
                       {lang === "ar" ? "معلومات الطلب" : "Order Information"}
                     </h3>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {t.nameLabel} *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t.nameLabel} *</label>
                         <input
                           ref={nameInputRef}
                           type="text"
                           value={orderForm.name}
-                          onChange={(e) => setOrderForm({...orderForm, name: e.target.value})}
+                          onChange={(e) => setOrderForm({ ...orderForm, name: e.target.value })}
                           placeholder={t.namePlaceholder}
                           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
                         />
                       </div>
-                      
+
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {t.phoneLabel} *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t.phoneLabel} *</label>
                         <input
                           ref={phoneInputRef}
                           type="tel"
                           value={orderForm.phone}
-                          onChange={(e) => setOrderForm({...orderForm, phone: e.target.value})}
+                          onChange={(e) => setOrderForm({ ...orderForm, phone: e.target.value })}
                           placeholder={t.phonePlaceholder}
                           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
                         />
                       </div>
                     </div>
-                    
+
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {t.locationLabel} *
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t.locationLabel} *</label>
                       <textarea
                         ref={locationInputRef}
                         value={orderForm.location}
-                        onChange={(e) => setOrderForm({...orderForm, location: e.target.value})}
+                        onChange={(e) => setOrderForm({ ...orderForm, location: e.target.value })}
                         placeholder={t.locationPlaceholder}
                         rows={2}
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
                       />
                     </div>
-                    
+
                     <div className="flex flex-col sm:flex-row gap-3">
                       <button
                         onClick={sendOrderViaWhatsApp}
@@ -852,11 +759,8 @@ Question: ${aiMessage}`,
                         <span className="text-xl">📱</span>
                         <span>{t.sendOrder}</span>
                       </button>
-                      
-                      <button
-                        onClick={() => setShowOrderForm(false)}
-                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 transition-colors"
-                      >
+
+                      <button onClick={() => setShowOrderForm(false)} className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 transition-colors">
                         {lang === "ar" ? "إغلاق" : "Close"}
                       </button>
                     </div>
@@ -880,7 +784,7 @@ Question: ${aiMessage}`,
                 onChange={(e) => setAiMessage(e.target.value)}
                 placeholder={lang === "ar" ? "اسأل عن العسل، الفوائد، التخزين..." : "Ask about honey, benefits, storage..."}
                 className="flex-1 p-4 rounded-xl text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm md:text-base"
-                onKeyPress={(e) => e.key === 'Enter' && handleAiConsult()}
+                onKeyPress={(e) => e.key === "Enter" && handleAiConsult()}
               />
               <button
                 onClick={handleAiConsult}
@@ -911,20 +815,15 @@ Question: ${aiMessage}`,
           </div>
         </section>
 
-        {/* ================= PRODUCTS SECTION (ALWAYS OPEN) ================= */}
+        {/* ================= PRODUCTS SECTION ================= */}
         <section className="bg-white rounded-2xl shadow-xl border border-amber-100 overflow-hidden">
-          <button
-            onClick={() => setOpenProducts(!openProducts)}
-            className="w-full text-start p-5 md:p-6"
-          >
+          <button onClick={() => setOpenProducts(!openProducts)} className="w-full text-start p-5 md:p-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl md:text-2xl font-black text-amber-900 flex items-center gap-2">
                 <span className="text-2xl">🍯</span>
                 {lang === "ar" ? "منتجاتنا المميزة" : "Our Premium Products"}
               </h2>
-              <span className={`text-amber-500 text-xl transition-transform duration-300 ${openProducts ? 'rotate-180' : ''}`}>
-                ▾
-              </span>
+              <span className={`text-amber-500 text-xl transition-transform duration-300 ${openProducts ? "rotate-180" : ""}`}>▾</span>
             </div>
           </button>
 
@@ -949,36 +848,25 @@ Question: ${aiMessage}`,
                         🏷️ {lang === "ar" ? "أفضل بيع" : "Best Seller"}
                       </div>
                     </div>
-                    
+
                     <div className="p-4">
-                      <h3 className="font-black text-lg mb-2 text-amber-900 line-clamp-1">
-                        {lang === "ar" ? product.titleAr : product.titleEn}
-                      </h3>
-                      
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                        {lang === "ar" ? product.descriptionAr : product.descriptionEn}
-                      </p>
-                      
+                      <h3 className="font-black text-lg mb-2 text-amber-900 line-clamp-1">{lang === "ar" ? product.titleAr : product.titleEn}</h3>
+
+                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">{lang === "ar" ? product.descriptionAr : product.descriptionEn}</p>
+
                       <div className="mb-4">
-                        <h4 className="font-bold text-amber-800 text-sm mb-2">
-                          {lang === "ar" ? "الفوائد:" : "Benefits:"}
-                        </h4>
+                        <h4 className="font-bold text-amber-800 text-sm mb-2">{lang === "ar" ? "الفوائد:" : "Benefits:"}</h4>
                         <div className="flex flex-wrap gap-2">
-                          {(lang === "ar" ? product.benefitsAr : product.benefitsEn).slice(0, 2).map((benefit, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-1 bg-amber-100 text-amber-800 rounded-lg text-xs"
-                            >
+                          {(lang === "ar" ? product.benefitsAr : product.benefitsEn).slice(0, 2).map((benefit: string, idx: number) => (
+                            <span key={idx} className="px-2 py-1 bg-amber-100 text-amber-800 rounded-lg text-xs">
                               {benefit}
                             </span>
                           ))}
                         </div>
                       </div>
-                      
+
                       <div>
-                        <h4 className="font-bold text-amber-800 text-sm mb-2">
-                          {t.chooseSize}:
-                        </h4>
+                        <h4 className="font-bold text-amber-800 text-sm mb-2">{t.chooseSize}:</h4>
                         <div className="space-y-2">
                           {product.prices.map((price) => (
                             <div
@@ -986,22 +874,20 @@ Question: ${aiMessage}`,
                               className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
                             >
                               <div>
-                                <span className="font-bold text-sm">
-                                  {lang === "ar" ? price.sizeAr : price.sizeEn}
-                                </span>
+                                <span className="font-bold text-sm">{lang === "ar" ? price.sizeAr : price.sizeEn}</span>
                                 <span className="mx-2 text-gray-400">•</span>
-                                <span className="font-bold text-green-600">
-                                  {price.price} {t.currency}
-                                </span>
+                                <span className="font-bold text-green-600">{price.price} {t.currency}</span>
                               </div>
-                              
+
                               <button
-                                onClick={() => addToCart(
-                                  product.id, 
-                                  price.id, 
-                                  lang === "ar" ? product.titleAr : product.titleEn,
-                                  lang === "ar" ? price.sizeAr : price.sizeEn
-                                )}
+                                onClick={() =>
+                                  addToCart(
+                                    product.id,
+                                    price.id,
+                                    lang === "ar" ? product.titleAr : product.titleEn,
+                                    lang === "ar" ? price.sizeAr : price.sizeEn
+                                  )
+                                }
                                 className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all font-bold text-sm flex items-center gap-2"
                               >
                                 <span>🛒</span>
@@ -1021,43 +907,36 @@ Question: ${aiMessage}`,
 
         {/* ================= REVIEWS SECTION ================= */}
         <section className="bg-white rounded-2xl shadow-xl border border-amber-100 overflow-hidden">
-          <button
-            onClick={() => setOpenReviews(!openReviews)}
-            className="w-full text-start p-5 md:p-6"
-          >
+          <button onClick={() => setOpenReviews(!openReviews)} className="w-full text-start p-5 md:p-6">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <span className="text-2xl">⭐</span>
                   {reviews.length > 0 && (
                     <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {reviews.filter(r => r.approved !== false).length}
+                      {reviews.filter((r) => r.approved !== false).length}
                     </span>
                   )}
                 </div>
                 <div>
-                  <h2 className="text-xl md:text-2xl font-black text-amber-900">
-                    {t.reviewsTitle}
-                  </h2>
+                  <h2 className="text-xl md:text-2xl font-black text-amber-900">{t.reviewsTitle}</h2>
                   <p className="text-sm text-gray-600">
-                    {lang === "ar" ? "متوسط التقييم" : "Average rating"}: <span className="font-bold text-amber-600">{avgRating}/5</span>
+                    {lang === "ar" ? "متوسط التقييم" : "Average rating"}:{" "}
+                    <span className="font-bold text-amber-600">{avgRating}/5</span>
                     {isAdmin && (
                       <span className="mr-2 ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
-                        {reviews.filter(r => r.approved !== false).length}/{reviews.length} {lang === "ar" ? "مفعل" : "approved"}
+                        {reviews.filter((r) => r.approved !== false).length}/{reviews.length} {lang === "ar" ? "مفعل" : "approved"}
                       </span>
                     )}
                   </p>
                 </div>
               </div>
-              <span className={`text-amber-500 text-xl transition-transform duration-300 ${openReviews ? 'rotate-180' : ''}`}>
-                ▾
-              </span>
+              <span className={`text-amber-500 text-xl transition-transform duration-300 ${openReviews ? "rotate-180" : ""}`}>▾</span>
             </div>
           </button>
 
           {openReviews && (
             <div className="px-5 md:px-6 pb-6">
-              {/* Add Review Button */}
               <button
                 onClick={() => setShowReviewForm(!showReviewForm)}
                 className="w-full mb-4 p-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold hover:from-amber-600 hover:to-orange-600 transition-all flex items-center justify-center gap-2"
@@ -1066,72 +945,50 @@ Question: ${aiMessage}`,
                 <span>{t.leaveReview}</span>
               </button>
 
-              {/* Review Form */}
               {showReviewForm && (
-                <form
-                  onSubmit={submitReview}
-                  className="mb-6 p-4 bg-amber-50 rounded-xl space-y-4 border border-amber-200"
-                >
+                <form onSubmit={submitReview} className="mb-6 p-4 bg-amber-50 rounded-xl space-y-4 border border-amber-200">
                   <div className="space-y-2">
-                    <label className="font-bold text-amber-900 text-sm">
-                      {t.reviewNameLabel}
-                    </label>
+                    <label className="font-bold text-amber-900 text-sm">{t.reviewNameLabel}</label>
                     <input
                       required
                       placeholder={t.namePlaceholder}
                       value={newReview.name}
-                      onChange={(e) =>
-                        setNewReview({ ...newReview, name: e.target.value })
-                      }
+                      onChange={(e) => setNewReview({ ...newReview, name: e.target.value })}
                       className="w-full p-3 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="font-bold text-amber-900 text-sm">
-                      {t.reviewRatingLabel}
-                    </label>
+                    <label className="font-bold text-amber-900 text-sm">{t.reviewRatingLabel}</label>
                     <div className="flex gap-2 items-center">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button
                           type="button"
                           key={star}
                           onClick={() => setNewReview({ ...newReview, rating: star })}
-                          className={`text-2xl md:text-3xl transition-all hover:scale-110 ${star <= newReview.rating ? 'text-amber-500' : 'text-gray-300'}`}
+                          className={`text-2xl md:text-3xl transition-all hover:scale-110 ${star <= newReview.rating ? "text-amber-500" : "text-gray-300"}`}
                         >
                           ⭐
                         </button>
                       ))}
-                      <span className="font-bold text-amber-700 ml-2 md:ml-4 text-lg">
-                        {newReview.rating}/5
-                      </span>
+                      <span className="font-bold text-amber-700 ml-2 md:ml-4 text-lg">{newReview.rating}/5</span>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="font-bold text-amber-900 text-sm">
-                      {t.reviewCommentLabel}
-                    </label>
+                    <label className="font-bold text-amber-900 text-sm">{t.reviewCommentLabel}</label>
                     <textarea
                       required
                       placeholder={lang === "ar" ? "اكتب رأيك هنا..." : "Write your review here..."}
                       value={newReview.comment}
-                      onChange={(e) =>
-                        setNewReview({
-                          ...newReview,
-                          comment: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
                       className="w-full p-3 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm min-h-[100px]"
                       rows={3}
                     />
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <button
-                      type="submit"
-                      className="flex-1 px-4 py-3 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors text-sm"
-                    >
+                    <button type="submit" className="flex-1 px-4 py-3 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors text-sm">
                       {t.reviewSubmit}
                     </button>
                     <button
@@ -1148,125 +1005,99 @@ Question: ${aiMessage}`,
                 </form>
               )}
 
-              {/* Admin Controls - Only shown when admin is logged in */}
               {isAdmin && reviews.length > 0 && (
                 <div className="mb-4 p-4 bg-purple-50 rounded-xl border border-purple-200">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-purple-600">👑</span>
-                    <h3 className="font-bold text-purple-800">
-                      {lang === "ar" ? "إدارة التقييمات" : "Review Management"}
-                    </h3>
+                    <h3 className="font-bold text-purple-800">{lang === "ar" ? "إدارة التقييمات" : "Review Management"}</h3>
                   </div>
                   <div className="text-sm text-purple-700">
-                    {lang === "ar" 
-                      ? "يمكنك النقر على أي تقييم لرؤية خيارات الإدارة"
-                      : "Click on any review to see management options"}
+                    {lang === "ar" ? "يمكنك النقر على أي تقييم لرؤية خيارات الإدارة" : "Click on any review to see management options"}
                   </div>
                 </div>
               )}
 
-              {/* Reviews List */}
               <div className="space-y-4">
                 {isLoadingReviews ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto"></div>
-                    <p className="mt-4 text-amber-700">
-                      {t.reviewLoading}
-                    </p>
+                    <p className="mt-4 text-amber-700">{t.reviewLoading}</p>
                   </div>
-                ) : reviews.filter(r => r.approved !== false).length === 0 ? (
+                ) : reviews.filter((r) => r.approved !== false).length === 0 ? (
                   <div className="text-center py-8 bg-amber-50 rounded-xl border border-amber-200">
-                    <p className="text-gray-500">
-                      {t.reviewEmpty}
-                    </p>
+                    <p className="text-gray-500">{t.reviewEmpty}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {reviews
-                      .filter(review => review.approved !== false)
+                      .filter((review) => review.approved !== false)
                       .slice(0, 6)
                       .map((review, index) => (
-                      <div
-                        key={review.id || index}
-                        className="bg-gradient-to-br from-white to-amber-50 p-4 rounded-xl shadow border border-amber-100 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <div className="font-bold text-amber-900 text-sm md:text-base flex items-center gap-2">
-                              {review.name || (review.ar?.name || review.en?.name)}
-                              {review.approved && (
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                  ✅
-                                </span>
-                              )}
-                            </div>
-                            {review.date && (
-                              <div className="text-xs text-gray-500">
-                                {new Date(review.date).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                })}
-                                {review.updatedAt && (
-                                  <span className="text-xs text-blue-500 mr-2">
-                                    ✏️ {lang === "ar" ? "معدل" : "edited"}
-                                  </span>
+                        <div
+                          key={review.id || index}
+                          className="bg-gradient-to-br from-white to-amber-50 p-4 rounded-xl shadow border border-amber-100 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <div className="font-bold text-amber-900 text-sm md:text-base flex items-center gap-2">
+                                {review.name || review.ar?.name || review.en?.name}
+                                {review.approved && (
+                                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✅</span>
                                 )}
                               </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="flex items-center gap-1 bg-amber-100 px-2 py-1 rounded-full">
-                              <span className="text-amber-700 font-bold text-sm md:text-base">
-                                {review.rating || 5}
-                              </span>
-                              <span className="text-lg text-amber-500">⭐</span>
+                              {review.date && (
+                                <div className="text-xs text-gray-500">
+                                  {new Date(review.date).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                  {review.updatedAt && (
+                                    <span className="text-xs text-blue-500 mr-2">
+                                      ✏️ {lang === "ar" ? "معدل" : "edited"}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 bg-amber-100 px-2 py-1 rounded-full">
+                                <span className="text-amber-700 font-bold text-sm md:text-base">{review.rating || 5}</span>
+                                <span className="text-lg text-amber-500">⭐</span>
+                              </div>
                             </div>
                           </div>
+
+                          <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                            {review.comment ||
+                              (lang === "ar" ? review.ar?.comment : review.en?.comment) ||
+                              review.ar?.comment ||
+                              review.en?.comment}
+                          </p>
+
+                          {isAdmin && (
+                            <div className="flex flex-wrap gap-2 pt-3 border-t border-amber-100">
+                              <button onClick={() => startEditReview(review)} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors">
+                                ✏️ {lang === "ar" ? "تعديل" : "Edit"}
+                              </button>
+
+                              <button onClick={() => deleteReview(review.id)} className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors">
+                                🗑️ {lang === "ar" ? "حذف" : "Delete"}
+                              </button>
+
+                              {!review.approved ? (
+                                <button onClick={() => approveReview(review.id)} className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors">
+                                  ✅ {lang === "ar" ? "تفعيل" : "Approve"}
+                                </button>
+                              ) : (
+                                <button onClick={() => unapproveReview(review.id)} className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors">
+                                  ⏸️ {lang === "ar" ? "إلغاء التفعيل" : "Unapprove"}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        
-                        <p className="text-gray-700 text-sm leading-relaxed mb-3">
-                          {review.comment || 
-                            (lang === "ar" ? review.ar?.comment : review.en?.comment) ||
-                            (review.ar?.comment || review.en?.comment)}
-                        </p>
-                        
-                        {/* Admin Actions - Only shown when admin is logged in */}
-                        {isAdmin && (
-                          <div className="flex flex-wrap gap-2 pt-3 border-t border-amber-100">
-                            <button
-                              onClick={() => startEditReview(review)}
-                              className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors"
-                            >
-                              ✏️ {lang === "ar" ? "تعديل" : "Edit"}
-                            </button>
-                            
-                            <button
-                              onClick={() => deleteReview(review.id)}
-                              className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
-                            >
-                              🗑️ {lang === "ar" ? "حذف" : "Delete"}
-                            </button>
-                            
-                            {!review.approved ? (
-                              <button
-                                onClick={() => approveReview(review.id)}
-                                className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors"
-                              >
-                                ✅ {lang === "ar" ? "تفعيل" : "Approve"}
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => unapproveReview(review.id)}
-                                className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors"
-                              >
-                                ⏸️ {lang === "ar" ? "إلغاء التفعيل" : "Unapprove"}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 )}
               </div>
@@ -1277,9 +1108,7 @@ Question: ${aiMessage}`,
         {/* ================= CONTACT SECTION ================= */}
         <section className="bg-gradient-to-r from-amber-600 to-amber-800 text-white rounded-2xl shadow-xl overflow-hidden">
           <div className="p-5 md:p-6">
-            <h2 className="text-xl md:text-2xl font-black mb-6 text-center">
-              {t.contactUs}
-            </h2>
+            <h2 className="text-xl md:text-2xl font-black mb-6 text-center">{t.contactUs}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <a
                 href={`https://wa.me/${WHATSAPP_NUMBER}`}
@@ -1316,39 +1145,25 @@ Question: ${aiMessage}`,
           <div className="text-center">
             <div className="flex justify-center mb-6">
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-amber-500 shadow-lg">
-                <img 
-                  src="https://imgur.com/tpBWWTy.jpeg" 
-                  alt="بيت العسل Honey House"
-                  className="w-full h-full object-cover"
-                />
+                <img src="https://imgur.com/tpBWWTy.jpeg" alt="بيت العسل Honey House" className="w-full h-full object-cover" />
               </div>
             </div>
-            
+
             <h3 className="text-xl font-black mb-2">بيت العسل | Honey House</h3>
             <p className="opacity-80 mb-6 text-sm md:text-base">
-              {lang === "ar" 
-                ? "عسل طبيعي 100% من المنحل مباشرة إلى منزلك في الإمارات"
-                : "100% Natural honey delivered directly from the apiary to your home in UAE"}
+              {lang === "ar" ? "عسل طبيعي 100% من المنحل مباشرة إلى منزلك في الإمارات" : "100% Natural honey delivered directly from the apiary to your home in UAE"}
             </p>
-            
+
             <div className="flex flex-wrap justify-center gap-3 mb-6">
-              <button
-                onClick={() => setLang("ar")}
-                className={`px-4 py-2 rounded-lg ${lang === "ar" ? "bg-amber-500" : "bg-amber-800"} hover:bg-amber-600 transition-colors text-sm`}
-              >
+              <button onClick={() => setLang("ar")} className={`px-4 py-2 rounded-lg ${lang === "ar" ? "bg-amber-500" : "bg-amber-800"} hover:bg-amber-600 transition-colors text-sm`}>
                 {t.arabic}
               </button>
-              <button
-                onClick={() => setLang("en")}
-                className={`px-4 py-2 rounded-lg ${lang === "en" ? "bg-amber-500" : "bg-amber-800"} hover:bg-amber-600 transition-colors text-sm`}
-              >
+              <button onClick={() => setLang("en")} className={`px-4 py-2 rounded-lg ${lang === "en" ? "bg-amber-500" : "bg-amber-800"} hover:bg-amber-600 transition-colors text-sm`}>
                 {t.english}
               </button>
             </div>
-            
-            <p className="text-sm opacity-60">
-              © {new Date().getFullYear()} بيت العسل. {t.copyright}.
-            </p>
+
+            <p className="text-sm opacity-60">© {new Date().getFullYear()} بيت العسل. {t.copyright}.</p>
           </div>
         </div>
       </footer>
@@ -1366,65 +1181,18 @@ Question: ${aiMessage}`,
         </div>
       </a>
 
-      {/* Add custom styles */}
-      <style jsx global>{`
+      {/* Custom styles (Vite-safe) */}
+      <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
-        
-        .font-cairo {
-          font-family: 'Cairo', sans-serif;
-        }
-        
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        
-        .line-clamp-1 {
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-box-orient: vertical;
-          -webkit-line-clamp: 1;
-        }
-        
-        .line-clamp-2 {
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-box-orient: vertical;
-          -webkit-line-clamp: 2;
-        }
-        
-        .line-clamp-3 {
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-box-orient: vertical;
-          -webkit-line-clamp: 3;
-        }
-        
-        @keyframes slide-in {
-          from {
-            transform: translateY(-100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        
-        .animate-slide-in {
-          animation: slide-in 0.3s ease-out;
-        }
-        
-        @media (max-width: 640px) {
-          .container {
-            padding-left: 1rem;
-            padding-right: 1rem;
-          }
-        }
+        .font-cairo { font-family: 'Cairo', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+        .line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+        @keyframes slide-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-in { animation: slide-in 0.3s ease-out; }
+        @media (max-width: 640px) { .container { padding-left: 1rem; padding-right: 1rem; } }
       `}</style>
     </div>
   );
