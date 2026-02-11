@@ -4,6 +4,19 @@ import { Language, CartItem } from './types';
 import { PRODUCTS, TRANSLATIONS, WHATSAPP_NUMBER, INSTAGRAM_URL, FAQS, MOCK_REVIEWS } from './constants';
 import { GoogleGenAI } from "@google/genai";
 
+// Review object stored in backend (Vercel KV / file / etc.)
+type ReviewObj = {
+  id: string;
+  name: string;
+  rating: number;
+  comment: string;
+  createdAt?: number;
+};
+  en: { name: string; comment: string };
+  rating: number;
+  createdAt?: string;
+};
+
 const App: React.FC = () => {
   // Fix: Corrected the generic type syntax and closing bracket for useState
   const [lang, setLang] = useState<Language>('ar');
@@ -234,21 +247,15 @@ Provide a very short, professional, and helpful response.`,
       // fallback: show locally if server fails
       const local: ReviewObj = {
         id: `local-${Date.now()}`,
+        name: newReview.name,
         rating: newReview.rating,
+        comment: newReview.comment,
         createdAt: Date.now(),
-        ar: { name: newReview.name, comment: newReview.comment },
-        en: { name: newReview.name, comment: newReview.comment },
       };
       setReviews(prev => [local, ...prev]);
       setNewReview({ name: '', rating: 5, comment: '' });
       setShowReviewForm(false);
     }
-  };
-    const updated = [reviewObj, ...localReviews];
-    setLocalReviews(updated);
-    localStorage.setItem('honey_house_reviews_v2', JSON.stringify(updated));
-    setNewReview({ name: '', rating: 5, comment: '' });
-    setShowReviewForm(false);
   };
 
   const scrollToSection = (id: string) => {
@@ -473,9 +480,9 @@ Provide a very short, professional, and helpful response.`,
                           onClick={() => {
                             setEditingId(r.id);
                             setEditDraft({
-                              name: lang === 'ar' ? r.ar.name : r.en.name,
+                              name: r.name,
                               rating: r.rating,
-                              comment: lang === 'ar' ? r.ar.comment : r.en.comment,
+                              comment: r.comment,
                             });
                           }}
                           className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-100 text-amber-950 text-xs font-black hover:bg-amber-100"
@@ -562,13 +569,13 @@ Provide a very short, professional, and helpful response.`,
                     </div>
                   ) : (
                     <>
-                      <p className="text-amber-950/80 italic text-base sm:text-lg mb-6 leading-relaxed">"{lang === 'ar' ? r.ar.comment : r.en.comment}"</p>
+                      <p className="text-amber-950/80 italic text-base sm:text-lg mb-6 leading-relaxed">"{r.comment}"</p>
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-xl font-black text-amber-600 uppercase">
-                          {(lang === 'ar' ? r.ar.name : r.en.name).charAt(0)}
+                          {(r.name).charAt(0)}
                         </div>
                         <div>
-                          <p className="font-black text-amber-950">{lang === 'ar' ? r.ar.name : r.en.name}</p>
+                          <p className="font-black text-amber-950">{r.name}</p>
                           <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">{lang === 'ar' ? 'عميل موثق' : 'Verified Customer'}</p>
                         </div>
                       </div>
