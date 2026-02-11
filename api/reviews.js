@@ -1,126 +1,125 @@
 import { kv } from '@vercel/kv';
+import crypto from 'crypto';
 
-/**
- * Reviews API (Vercel KV)
- * - GET    /api/reviews              -> list reviews
- * - POST   /api/reviews              -> add review (public)
- * - PUT    /api/reviews              -> update review (admin)
- * - DELETE /api/reviews?id=<id>      -> delete review (admin)
- */
+// Store an array of reviews under one KV key.
+// Review shape:
+// { id, rating, createdAt, ar:{name,comment}, en:{name,comment} }
+const KV_KEY = 'honey_house:reviews:v1';
 
-const KV_KEY = 'honeyhouse:reviews:v1';
+function readBody(req) {
+  // Vercel parses JSON body into req.body for Node runtime.
+  return req.body || {};
+}
 
-function json(res, status = 200) {
-  return new Response(JSON.stringify(res), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+function getAdminKey(req) {
+  // Allow either header or query param for convenience.
+  return (
+    req.headers['x-admin-key'] ||
+    req.headers['X-Admin-Key'] ||
+    (req.query && (req.query.key || req.query.adminKey)) ||
+    ''
+  );
 }
 
 function requireAdmin(req) {
-  const key = req.headers.get('x-admin-key') || '';
-  if (!process.env.ADMIN_REVIEW_KEY) return false; // must be set in Vercel env
-  return key && key === process.env.ADMIN_REVIEW_KEY;
+  const expected = process.env.ADMIN_KEY || '';
+  if (!expected) return { ok: false, reason: 'ADMIN_KEY is not set on the server.' };
+  const provided = String(getAdminKey(req) || '');
+  if (!provided || provided !== expected) return { ok: false, reason: 'Unauthorized (bad admin key).' };
+  return { ok: true };
 }
 
-function normalizeReview({ id, name, comment, rating, lang, createdAt }) {
-  const safeName = String(name || '').trim().slice(0, 60);
-  const safeComment = String(comment || '').trim().slice(0, 500);
-  const safeRating = Math.min(5, Math.max(1, Number(rating) || 5));
-
-  const base = {
-    id,
-    rating: safeRating,
-    createdAt: createdAt ?? Date.now(),
-  };
-
-  // Keep both languages so UI can switch without losing text
-  if (lang === 'en') {
-    return {
-      ...base,
-      ar: { name: safeName, comment: safeComment },
-      en: { name: safeName, comment: safeComment },
-    };
-  }
-  return {
-    ...base,
-    ar: { name: safeName, comment: safeComment },
-    en: { name: safeName, comment: safeComment },
-  };
-}
-
-async function readAll() {
-  const data = await kv.get(KV_KEY);
-  return Array.isArray(data) ? data : [];
-}
-
-export default async function handler(req) {
+export default async function handler(req, res) {
   try {
-    const method = (req.method || 'GET').toUpperCase();
-
-    if (method === 'GET') {
-      const all = await readAll();
-      return json(all, 200);
+    if (req.method === 'GET') {
+      const reviews = (await kv.get(KV_KEY)) || [];
+      return res.status(200).json({ reviews });
     }
 
-    if (method === 'POST') {
-      const body = await req.json();
-      const id = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-      const review = normalizeReview({
-        id,
-        name: body?.name,
-        comment: body?.comment,
-        rating: body?.rating,
-        lang: body?.lang,
-      });
+    if (req.method === 'POST') {
+      const body = readBody(req);
+      const name = String(body.name || '').trim();
+      const comment = String(body.comment || '').trim();
+      const rating = Number(body.rating || 5);
 
-      const all = await readAll();
-      const next = [review, ...all].slice(0, 200); // keep last 200
-      await kv.set(KV_KEY, next);
-      return json(review, 200);
+      if (!name || !comment) {
+        return res.status(400).json({ error: 'Missing name or comment.' });
+      }
+      const safeRating = Math.max(1, Math.min(5, Number.isFinite(rating) ? rating : 5));
+
+      const review = {
+        id: crypto.randomUUID(),
+        rating: safeRating,
+        createdAt: Date.now(),
+        ar: { name, comment },
+        en: { name, comment },
+      };
+
+      const existing = (await kv.get(KV_KEY)) || [];
+      const updated = [review, ...existing].slice(0, 500); // keep a sane cap
+      await kv.set(KV_KEY, updated);
+
+      return res.status(200).json({ review, reviews: updated });
     }
 
-    if (method === 'PUT') {
-      if (!requireAdmin(req)) return json({ error: 'Unauthorized' }, 401);
+    if (req.method === 'PATCH') {
+      const auth = requireAdmin(req);
+      if (!auth.ok) return res.status(401).json({ error: auth.reason });
 
-      const body = await req.json();
-      const id = String(body?.id || '').trim();
-      if (!id) return json({ error: 'Missing id' }, 400);
+      const body = readBody(req);
+      const id = String(body.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'Missing review id.' });
 
-      const all = await readAll();
-      const idx = all.findIndex(r => r?.id === id);
-      if (idx === -1) return json({ error: 'Not found' }, 404);
+      const existing = (await kv.get(KV_KEY)) || [];
+      const idx = existing.findIndex((r) => String(r.id) === id);
+      if (idx === -1) return res.status(404).json({ error: 'Review not found.' });
 
-      const updated = normalizeReview({
-        id,
-        name: body?.name,
-        comment: body?.comment,
-        rating: body?.rating,
-        lang: body?.lang,
-        createdAt: all[idx]?.createdAt ?? Date.now(),
-      });
+      const cur = existing[idx];
+      const next = { ...cur };
 
-      const next = [...all];
-      next[idx] = updated;
-      await kv.set(KV_KEY, next);
-      return json(updated, 200);
+      if (body.rating !== undefined) {
+        const rr = Number(body.rating);
+        next.rating = Math.max(1, Math.min(5, Number.isFinite(rr) ? rr : cur.rating));
+      }
+      if (body.name !== undefined) {
+        const n = String(body.name || '').trim();
+        if (n) {
+          next.ar = { ...(next.ar || {}), name: n };
+          next.en = { ...(next.en || {}), name: n };
+        }
+      }
+      if (body.comment !== undefined) {
+        const c = String(body.comment || '').trim();
+        if (c) {
+          next.ar = { ...(next.ar || {}), comment: c };
+          next.en = { ...(next.en || {}), comment: c };
+        }
+      }
+
+      const updated = [...existing];
+      updated[idx] = next;
+      await kv.set(KV_KEY, updated);
+
+      return res.status(200).json({ review: next, reviews: updated });
     }
 
-    if (method === 'DELETE') {
-      if (!requireAdmin(req)) return json({ error: 'Unauthorized' }, 401);
+    if (req.method === 'DELETE') {
+      const auth = requireAdmin(req);
+      if (!auth.ok) return res.status(401).json({ error: auth.reason });
 
-      const url = new URL(req.url);
-      const id = url.searchParams.get('id');
-      if (!id) return json({ error: 'Missing id' }, 400);
+      const body = readBody(req);
+      const id = String(body.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'Missing review id.' });
 
-      const all = await readAll();
-      const next = all.filter(r => r?.id !== id);
-      await kv.set(KV_KEY, next);
-      return json({ ok: true }, 200);
+      const existing = (await kv.get(KV_KEY)) || [];
+      const updated = existing.filter((r) => String(r.id) !== id);
+      await kv.set(KV_KEY, updated);
+
+      return res.status(200).json({ ok: true, reviews: updated });
     }
 
-    return json({ error: 'Method not allowed' }, 405);
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
-    return json({ error: 'Server error', details: String(err?.message || err) }, 500);
+    return res.status(500).json({ error: 'Server error', details: String(err?.message || err) });
   }
 }
