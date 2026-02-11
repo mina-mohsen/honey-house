@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Language, CartItem } from "./types";
 import {
   PRODUCTS,
   TRANSLATIONS,
   WHATSAPP_NUMBER,
   INSTAGRAM_URL,
-  FAQS,
   MOCK_REVIEWS,
   DELIVERY_INFO,
 } from "./constants";
+
+const REVIEWS_API = "/api/reviews";
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>("ar");
@@ -22,11 +23,7 @@ const App: React.FC = () => {
   /* ================= Cart / Order ================= */
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [showOrderForm, setShowOrderForm] = useState(false);
-  const [orderForm, setOrderForm] = useState({
-    name: "",
-    phone: "",
-    location: "",
-  });
+  const [orderForm, setOrderForm] = useState({ name: "", phone: "", location: "" });
   const [showCartNotification, setShowCartNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
 
@@ -45,22 +42,14 @@ const App: React.FC = () => {
   const [openReviews, setOpenReviews] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
-  const [reviewUpdateKey, setReviewUpdateKey] = useState(0);
-  const [newReview, setNewReview] = useState({
-    name: "",
-    rating: 5,
-    comment: "",
-  });
-
-  // ✅ NEW: Show all reviews toggle
-  const [showAllReviews, setShowAllReviews] = useState(false);
+  const [newReview, setNewReview] = useState({ name: "", rating: 5, comment: "" });
 
   /* ================= Review Management ================= */
   const [editingReview, setEditingReview] = useState<any>(null);
   const [showEditForm, setShowEditForm] = useState(false);
 
   /* ================= Products ================= */
-  const [openProducts, setOpenProducts] = useState(true); // Products open by default
+  const [openProducts, setOpenProducts] = useState(true);
 
   const t = useMemo(() => TRANSLATIONS[lang], [lang]);
 
@@ -70,52 +59,53 @@ const App: React.FC = () => {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  /* Load reviews from localStorage on initial load */
-  useEffect(() => {
-    const loadReviews = () => {
-      setIsLoadingReviews(true);
-      try {
-        const savedReviews = localStorage.getItem("honeyhouse_reviews");
-        if (savedReviews) {
-          const parsedReviews = JSON.parse(savedReviews);
-          if (Array.isArray(parsedReviews) && parsedReviews.length > 0) {
-            setReviews(parsedReviews);
-          } else {
-            setReviews(MOCK_REVIEWS);
-            localStorage.setItem("honeyhouse_reviews", JSON.stringify(MOCK_REVIEWS));
-          }
-        } else {
-          setReviews(MOCK_REVIEWS);
-          localStorage.setItem("honeyhouse_reviews", JSON.stringify(MOCK_REVIEWS));
-        }
-      } catch (error) {
-        console.error("Failed to load reviews:", error);
+  /* =============== Load Reviews (Server first, fallback local) =============== */
+  const loadReviews = async () => {
+    setIsLoadingReviews(true);
+    try {
+      const r = await fetch(REVIEWS_API, { method: "GET" });
+      if (!r.ok) throw new Error("Failed to load reviews from API");
+      const data = await r.json();
+      const apiReviews = Array.isArray(data?.reviews) ? data.reviews : [];
+
+      if (apiReviews.length > 0) {
+        setReviews(apiReviews);
+        // optional local cache
+        try {
+          localStorage.setItem("honeyhouse_reviews_cache", JSON.stringify(apiReviews));
+        } catch {}
+      } else {
+        // if API empty, fallback to mock (and keep UI not empty)
         setReviews(MOCK_REVIEWS);
-      } finally {
-        setIsLoadingReviews(false);
       }
-    };
-
-    loadReviews();
-  }, [reviewUpdateKey]);
-
-  /* Save reviews to localStorage whenever reviews change */
-  useEffect(() => {
-    if (reviews.length > 0) {
+    } catch (e) {
+      // fallback local cache then mock
       try {
-        localStorage.setItem("honeyhouse_reviews", JSON.stringify(reviews));
-      } catch (error) {
-        console.error("Failed to save reviews:", error);
-      }
+        const cached = localStorage.getItem("honeyhouse_reviews_cache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length) {
+            setReviews(parsed);
+            setIsLoadingReviews(false);
+            return;
+          }
+        }
+      } catch {}
+      setReviews(MOCK_REVIEWS);
+    } finally {
+      setIsLoadingReviews(false);
     }
-  }, [reviews]);
+  };
+
+  useEffect(() => {
+    loadReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* Show cart notification */
   useEffect(() => {
     if (showCartNotification) {
-      const timer = setTimeout(() => {
-        setShowCartNotification(false);
-      }, 3000);
+      const timer = setTimeout(() => setShowCartNotification(false), 3000);
       return () => clearTimeout(timer);
     }
   }, [showCartNotification]);
@@ -125,26 +115,23 @@ const App: React.FC = () => {
     return cartItems.reduce((total, item) => {
       const product = PRODUCTS.find((p) => p.id === item.productId);
       if (!product) return total;
-
       const price = product.prices.find((p) => p.id === item.priceId);
       if (!price) return total;
-
       return total + price.price * item.quantity;
     }, 0);
   }, [cartItems]);
 
-  // ✅ Approved reviews list
-  const approvedReviews = useMemo(() => {
-    return reviews.filter((r) => r && r.approved !== false);
-  }, [reviews]);
+  /* Calculate average rating + count */
+  const approvedReviews = useMemo(() => reviews.filter((r) => r.approved !== false), [reviews]);
 
-  /* Calculate average rating */
   const avgRating = useMemo(() => {
     if (!approvedReviews.length) return "0.0";
     return (
-      approvedReviews.reduce((a, r) => a + (r.rating || 0), 0) / approvedReviews.length
+      approvedReviews.reduce((a, r) => a + (Number(r.rating) || 0), 0) / approvedReviews.length
     ).toFixed(1);
   }, [approvedReviews]);
+
+  const approvedCount = approvedReviews.length;
 
   /* ================= Admin Functions ================= */
   const handleAdminLogin = () => {
@@ -165,7 +152,7 @@ const App: React.FC = () => {
     setTimeout(() => setAdminMessage(""), 3000);
   };
 
-  /* ================= Review Management Functions ================= */
+  /* ================= Review Management Functions (Local UI only) ================= */
   const startEditReview = (review: any) => {
     setEditingReview({ ...review });
     setShowEditForm(true);
@@ -173,51 +160,42 @@ const App: React.FC = () => {
   };
 
   const saveEditReview = () => {
-    if (!editingReview.name.trim() || !editingReview.comment.trim()) {
+    if (!editingReview?.name?.trim() || !editingReview?.comment?.trim()) {
       alert(lang === "ar" ? "الرجاء ملء جميع الحقول المطلوبة." : "Please fill all required fields.");
       return;
     }
 
     setReviews((prev) =>
-      prev.map((review) =>
-        review.id === editingReview.id
-          ? {
-              ...editingReview,
-              name: editingReview.name.trim(),
-              comment: editingReview.comment.trim(),
-              updatedAt: new Date().toISOString(),
-            }
-          : review
+      prev.map((r) =>
+        r.id === editingReview.id
+          ? { ...editingReview, name: editingReview.name.trim(), comment: editingReview.comment.trim(), updatedAt: new Date().toISOString() }
+          : r
       )
     );
 
     setShowEditForm(false);
     setEditingReview(null);
-    setAdminMessage(lang === "ar" ? "تم تعديل التقييم بنجاح" : "Review updated successfully");
+    setAdminMessage(lang === "ar" ? "تم تعديل التقييم (محليًا)" : "Review updated (locally)");
     setTimeout(() => setAdminMessage(""), 3000);
   };
 
   const deleteReview = (reviewId: string) => {
     if (window.confirm(lang === "ar" ? "هل أنت متأكد من حذف هذا التقييم؟" : "Are you sure you want to delete this review?")) {
-      setReviews((prev) => prev.filter((review) => review.id !== reviewId));
-      setAdminMessage(lang === "ar" ? "تم حذف التقييم بنجاح" : "Review deleted successfully");
+      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+      setAdminMessage(lang === "ar" ? "تم حذف التقييم (محليًا)" : "Review deleted (locally)");
       setTimeout(() => setAdminMessage(""), 3000);
     }
   };
 
   const approveReview = (reviewId: string) => {
-    setReviews((prev) =>
-      prev.map((review) =>
-        review.id === reviewId ? { ...review, approved: true, approvedAt: new Date().toISOString() } : review
-      )
-    );
-    setAdminMessage(lang === "ar" ? "تم تفعيل التقييم" : "Review approved");
+    setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, approved: true, approvedAt: new Date().toISOString() } : r)));
+    setAdminMessage(lang === "ar" ? "تم تفعيل التقييم (محليًا)" : "Review approved (locally)");
     setTimeout(() => setAdminMessage(""), 3000);
   };
 
   const unapproveReview = (reviewId: string) => {
-    setReviews((prev) => prev.map((review) => (review.id === reviewId ? { ...review, approved: false } : review)));
-    setAdminMessage(lang === "ar" ? "تم إلغاء تفعيل التقييم" : "Review unapproved");
+    setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, approved: false } : r)));
+    setAdminMessage(lang === "ar" ? "تم إلغاء تفعيل التقييم (محليًا)" : "Review unapproved (locally)");
     setTimeout(() => setAdminMessage(""), 3000);
   };
 
@@ -226,17 +204,10 @@ const App: React.FC = () => {
     const existingItem = cartItems.find((item) => item.productId === productId && item.priceId === priceId);
 
     if (existingItem) {
-      setCartItems((prev) =>
-        prev.map((item) => (item.id === existingItem.id ? { ...item, quantity: item.quantity + 1 } : item))
-      );
+      setCartItems((prev) => prev.map((item) => (item.id === existingItem.id ? { ...item, quantity: item.quantity + 1 } : item)));
       setNotificationMessage(`${lang === "ar" ? "تم زيادة الكمية لـ" : "Increased quantity for"} ${productName} (${sizeName})`);
     } else {
-      const newItem: CartItem = {
-        id: `${productId}_${priceId}_${Date.now()}`,
-        productId,
-        priceId,
-        quantity: 1,
-      };
+      const newItem: CartItem = { id: `${productId}_${priceId}_${Date.now()}`, productId, priceId, quantity: 1 };
       setCartItems((prev) => [...prev, newItem]);
       setNotificationMessage(`${lang === "ar" ? "تم إضافة" : "Added"} ${productName} (${sizeName}) ${lang === "ar" ? "إلى السلة" : "to cart"}`);
     }
@@ -250,17 +221,11 @@ const App: React.FC = () => {
       removeFromCart(itemId);
       return;
     }
-
     setCartItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item)));
   };
 
-  const removeFromCart = (itemId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== itemId));
-  };
-
-  const clearCart = () => {
-    setCartItems([]);
-  };
+  const removeFromCart = (itemId: string) => setCartItems((prev) => prev.filter((item) => item.id !== itemId));
+  const clearCart = () => setCartItems([]);
 
   /* ================= Send Order via WhatsApp ================= */
   const sendOrderViaWhatsApp = () => {
@@ -269,19 +234,16 @@ const App: React.FC = () => {
       nameInputRef.current?.focus();
       return;
     }
-
     if (!orderForm.phone.trim()) {
       alert(lang === "ar" ? "الرجاء إدخال رقم الهاتف" : "Please enter phone number");
       phoneInputRef.current?.focus();
       return;
     }
-
     if (!orderForm.location.trim()) {
       alert(lang === "ar" ? "الرجاء إدخال عنوان التوصيل" : "Please enter delivery address");
       locationInputRef.current?.focus();
       return;
     }
-
     if (cartItems.length === 0) {
       alert(lang === "ar" ? "السلة فارغة. أضف منتجات أولاً." : "Cart is empty. Add products first.");
       return;
@@ -295,23 +257,19 @@ const App: React.FC = () => {
 
     cartItems.forEach((item) => {
       const product = PRODUCTS.find((p) => p.id === item.productId);
-      if (product) {
-        const price = product.prices.find((p) => p.id === item.priceId);
-        if (price) {
-          message += `- ${lang === "ar" ? product.titleAr : product.titleEn} (${lang === "ar" ? price.sizeAr : price.sizeEn}) x${item.quantity}: ${price.price * item.quantity} ${t.currency}\n`;
-        }
+      const price = product?.prices.find((p) => p.id === item.priceId);
+      if (product && price) {
+        message += `- ${lang === "ar" ? product.titleAr : product.titleEn} (${lang === "ar" ? price.sizeAr : price.sizeEn}) x${item.quantity}: ${price.price * item.quantity} ${t.currency}\n`;
       }
     });
 
     message += `\n*${t.whatsappTotal}* ${totalPrice} ${t.currency}`;
 
-    const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, "_blank");
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank");
 
     clearCart();
     setShowOrderForm(false);
     setOrderForm({ name: "", phone: "", location: "" });
-
     alert(lang === "ar" ? "تم إرسال الطلب بنجاح! سنتواصل معك قريباً." : "Order sent successfully! We'll contact you soon.");
   };
 
@@ -346,7 +304,7 @@ Question: ${aiMessage}`,
     }
   };
 
-  /* ================= Submit Review (WhatsApp) ================= */
+  /* ================= Submit Review (SERVER) ================= */
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -356,41 +314,63 @@ Question: ${aiMessage}`,
     }
 
     try {
-      const nowIso = new Date().toISOString();
-      const newReviewWithId = {
-        id: `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: newReview.name.trim(),
-        rating: newReview.rating,
-        comment: newReview.comment.trim(),
-        lang: lang,
-        date: nowIso,
-        createdAt: nowIso,
-        approved: true,
-      };
+      const r = await fetch(REVIEWS_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newReview.name.trim(),
+          rating: newReview.rating,
+          comment: newReview.comment.trim(),
+          lang,
+        }),
+      });
 
-      // Add to local list (for same device view)
-      const updatedReviews = [newReviewWithId, ...reviews];
-      setReviews(updatedReviews);
-      localStorage.setItem("honeyhouse_reviews", JSON.stringify(updatedReviews));
+      if (!r.ok) throw new Error("Failed to submit review");
 
-      // ✅ Send review to WhatsApp (admin collects reviews)
-      const waText =
-        `⭐ *${lang === "ar" ? "تقييم جديد - بيت العسل" : "New Review - Honey House"}*\n\n` +
-        `👤 *${lang === "ar" ? "الاسم" : "Name"}:* ${newReviewWithId.name}\n` +
-        `⭐ *${lang === "ar" ? "التقييم" : "Rating"}:* ${newReviewWithId.rating}/5\n` +
-        `📝 *${lang === "ar" ? "التعليق" : "Comment"}:* ${newReviewWithId.comment}\n` +
-        `📅 *${lang === "ar" ? "التاريخ" : "Date"}:* ${new Date(newReviewWithId.date).toLocaleString(lang === "ar" ? "ar-EG" : "en-US")}`;
+      const data = await r.json();
+      const created = data?.review;
 
-      window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(waText)}`, "_blank");
+      // optimistic update
+      if (created) {
+        const updated = [created, ...reviews];
+        setReviews(updated);
+        try {
+          localStorage.setItem("honeyhouse_reviews_cache", JSON.stringify(updated));
+        } catch {}
+      } else {
+        await loadReviews();
+      }
 
-      // Reset form
       setShowReviewForm(false);
       setNewReview({ name: "", rating: 5, comment: "" });
 
-      alert(lang === "ar" ? "تم إرسال تقييمك على واتساب ✅ شكراً لك." : "Your review was sent on WhatsApp ✅ Thank you.");
-    } catch (error) {
-      console.error("Error submitting review:", error);
-      alert(lang === "ar" ? "حدث خطأ أثناء إرسال التقييم. يرجى المحاولة مرة أخرى." : "Error submitting review. Please try again.");
+      alert(lang === "ar" ? "تم إرسال تقييمك بنجاح! شكراً لك." : "Review submitted successfully! Thank you.");
+    } catch (err) {
+      // fallback: local only
+      const fallback = {
+        id: `review_local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        name: newReview.name.trim(),
+        rating: newReview.rating,
+        comment: newReview.comment.trim(),
+        lang,
+        date: new Date().toISOString(),
+        approved: true,
+      };
+      const updated = [fallback, ...reviews];
+      setReviews(updated);
+      try {
+        localStorage.setItem("honeyhouse_reviews_cache", JSON.stringify(updated));
+      } catch {}
+
+      setShowReviewForm(false);
+      setNewReview({ name: "", rating: 5, comment: "" });
+
+      alert(
+        lang === "ar"
+          ? "تم حفظ التقييم مؤقتًا على جهازك (تعذر الاتصال بالسيرفر)."
+          : "Saved locally (server not reachable)."
+      );
+      console.error(err);
     }
   };
 
@@ -477,7 +457,12 @@ Question: ${aiMessage}`,
                 <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "التقييم:" : "Rating:"}</label>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <button key={star} onClick={() => setEditingReview({ ...editingReview, rating: star })} className={`text-3xl ${star <= editingReview.rating ? "text-amber-500" : "text-gray-300"}`}>
+                    <button
+                      type="button"
+                      key={star}
+                      onClick={() => setEditingReview({ ...editingReview, rating: star })}
+                      className={`text-3xl ${star <= (editingReview.rating || 5) ? "text-amber-500" : "text-gray-300"}`}
+                    >
                       ⭐
                     </button>
                   ))}
@@ -513,7 +498,7 @@ Question: ${aiMessage}`,
 
       {/* ================= PROMO BANNER ================= */}
       <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-center py-3 font-black text-sm md:text-base">
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 flex-wrap px-2">
           <span>🚚</span>
           <span>
             {lang === "ar" ? "توصيل خلال" : "Delivery within"} <b>24h – 48h</b>
@@ -545,7 +530,9 @@ Question: ${aiMessage}`,
             <div className="flex items-center gap-2">
               {isAdmin ? (
                 <div className="flex items-center gap-2">
-                  <span className="hidden sm:inline text-sm bg-purple-100 text-purple-800 px-3 py-1 rounded-full">👑 {lang === "ar" ? "مدير" : "Admin"}</span>
+                  <span className="hidden sm:inline text-sm bg-purple-100 text-purple-800 px-3 py-1 rounded-full">
+                    👑 {lang === "ar" ? "مدير" : "Admin"}
+                  </span>
                   <button onClick={handleAdminLogout} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 text-sm">
                     {lang === "ar" ? "خروج" : "Logout"}
                   </button>
@@ -577,9 +564,10 @@ Question: ${aiMessage}`,
               onClick={() => {
                 setOpenProducts(!openProducts);
                 setOpenReviews(false);
-                setShowAllReviews(false);
               }}
-              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${openProducts ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"}`}
+              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${
+                openProducts ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"
+              }`}
             >
               <span>🍯</span>
               <span className="text-sm">{lang === "ar" ? "المنتجات" : "Products"}</span>
@@ -589,15 +577,17 @@ Question: ${aiMessage}`,
               onClick={() => {
                 setOpenReviews(!openReviews);
                 setOpenProducts(false);
-                setShowAllReviews(false);
+                if (!openReviews) loadReviews(); // refresh when opening
               }}
-              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${openReviews ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"}`}
+              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${
+                openReviews ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"
+              }`}
             >
               <span>⭐</span>
               <span className="text-sm">{lang === "ar" ? "التقييمات" : "Reviews"}</span>
-              {approvedReviews.length > 0 && (
+              {approvedCount > 0 && (
                 <span className={`text-xs px-2 py-1 rounded-full ${openReviews ? "bg-white text-amber-500" : "bg-amber-500 text-white"}`}>
-                  {approvedReviews.length}
+                  {approvedCount}
                 </span>
               )}
             </button>
@@ -707,8 +697,7 @@ Question: ${aiMessage}`,
                     <div className="flex items-center gap-2 p-3 bg-amber-100 text-amber-800 rounded-lg mb-4">
                       <span className="text-xl">📦</span>
                       <span className="text-sm">
-                        {lang === "ar" ? "أضف" : "Add"} <span className="font-bold">{DELIVERY_INFO.FREE_THRESHOLD - totalPrice} {t.currency}</span>{" "}
-                        {lang === "ar" ? "أخرى للحصول على توصيل مجاني" : "more for free delivery"}
+                        {lang === "ar" ? "أضف" : "Add"} <span className="font-bold">{DELIVERY_INFO.FREE_THRESHOLD - totalPrice} {t.currency}</span> {lang === "ar" ? "أخرى للحصول على توصيل مجاني" : "more for free delivery"}
                       </span>
                     </div>
                   )}
@@ -838,14 +827,17 @@ Question: ${aiMessage}`,
             <div className="px-5 md:px-6 pb-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {PRODUCTS.map((product) => (
-                  <div key={product.id} className="bg-gradient-to-b from-white to-amber-50 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 border border-amber-100 overflow-hidden">
+                  <div
+                    key={product.id}
+                    className="bg-gradient-to-b from-white to-amber-50 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 border border-amber-100 overflow-hidden"
+                  >
                     <div className="relative">
                       <img
                         src={product.image}
                         alt={lang === "ar" ? product.titleAr : product.titleEn}
                         className="w-full h-48 object-cover"
                         onError={(e) => {
-                          e.currentTarget.src = "https://imgur.com/vIdADYw.jpeg";
+                          (e.currentTarget as HTMLImageElement).src = "https://imgur.com/vIdADYw.jpeg";
                         }}
                       />
                       <div className="absolute top-2 left-2 bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-bold">
@@ -855,24 +847,12 @@ Question: ${aiMessage}`,
 
                     <div className="p-4">
                       <h3 className="font-black text-lg mb-2 text-amber-900 line-clamp-1">{lang === "ar" ? product.titleAr : product.titleEn}</h3>
-
                       <p className="text-sm text-gray-600 mb-3 line-clamp-2">{lang === "ar" ? product.descriptionAr : product.descriptionEn}</p>
-
-                      <div className="mb-4">
-                        <h4 className="font-bold text-amber-800 text-sm mb-2">{lang === "ar" ? "الفوائد:" : "Benefits:"}</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {(lang === "ar" ? product.benefitsAr : product.benefitsEn).slice(0, 2).map((benefit: string, idx: number) => (
-                            <span key={idx} className="px-2 py-1 bg-amber-100 text-amber-800 rounded-lg text-xs">
-                              {benefit}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
 
                       <div>
                         <h4 className="font-bold text-amber-800 text-sm mb-2">{t.chooseSize}:</h4>
                         <div className="space-y-2">
-                          {product.prices.map((price: any) => (
+                          {product.prices.map((price) => (
                             <div key={price.id} className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors">
                               <div>
                                 <span className="font-bold text-sm">{lang === "ar" ? price.sizeAr : price.sizeEn}</span>
@@ -899,6 +879,7 @@ Question: ${aiMessage}`,
                         </div>
                       </div>
                     </div>
+
                   </div>
                 ))}
               </div>
@@ -908,23 +889,24 @@ Question: ${aiMessage}`,
 
         {/* ================= REVIEWS SECTION ================= */}
         <section className="bg-white rounded-2xl shadow-xl border border-amber-100 overflow-hidden">
-          <button onClick={() => setOpenReviews(!openReviews)} className="w-full text-start p-5 md:p-6">
+          <button onClick={() => { setOpenReviews(!openReviews); if (!openReviews) loadReviews(); }} className="w-full text-start p-5 md:p-6">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <span className="text-2xl">⭐</span>
-                  {approvedReviews.length > 0 && (
+                  {approvedCount > 0 && (
                     <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {approvedReviews.length}
+                      {approvedCount}
                     </span>
                   )}
                 </div>
                 <div>
                   <h2 className="text-xl md:text-2xl font-black text-amber-900">{t.reviewsTitle}</h2>
                   <p className="text-sm text-gray-600">
-                    {lang === "ar" ? "متوسط التقييم" : "Average rating"}: <span className="font-bold text-amber-600">{avgRating}/5</span>
+                    {lang === "ar" ? "متوسط التقييم" : "Average rating"}:{" "}
+                    <span className="font-bold text-amber-600">{avgRating}/5</span>
                     <span className="mx-2">•</span>
-                    <span className="font-bold text-amber-700">{approvedReviews.length}</span> {lang === "ar" ? "مُقيم" : "reviews"}
+                    <span className="font-bold text-gray-700">{approvedCount} {lang === "ar" ? "تقييم" : "reviews"}</span>
                   </p>
                 </div>
               </div>
@@ -1002,69 +984,83 @@ Question: ${aiMessage}`,
                 </form>
               )}
 
+              {isAdmin && approvedReviews.length > 0 && (
+                <div className="mb-4 p-4 bg-purple-50 rounded-xl border border-purple-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-purple-600">👑</span>
+                    <h3 className="font-bold text-purple-800">{lang === "ar" ? "إدارة التقييمات" : "Review Management"}</h3>
+                  </div>
+                  <div className="text-sm text-purple-700">{lang === "ar" ? "يمكنك استخدام الأزرار أسفل كل تقييم." : "Use buttons under each review."}</div>
+                </div>
+              )}
+
               <div className="space-y-4">
                 {isLoadingReviews ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto"></div>
                     <p className="mt-4 text-amber-700">{t.reviewLoading}</p>
                   </div>
-                ) : approvedReviews.length === 0 ? (
+                ) : approvedCount === 0 ? (
                   <div className="text-center py-8 bg-amber-50 rounded-xl border border-amber-200">
                     <p className="text-gray-500">{t.reviewEmpty}</p>
                   </div>
                 ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(showAllReviews ? approvedReviews : approvedReviews.slice(0, 6)).map((review: any, index: number) => (
-                        <div
-                          key={review.id || index}
-                          className="bg-gradient-to-br from-white to-amber-50 p-4 rounded-xl shadow border border-amber-100 hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <div className="font-bold text-amber-900 text-sm md:text-base flex items-center gap-2">
-                                {review.name || review.ar?.name || review.en?.name}
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✅</span>
-                              </div>
-                              {review.date && (
-                                <div className="text-xs text-gray-500">
-                                  {new Date(review.date).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { year: "numeric", month: "short", day: "numeric" })}
-                                  {review.updatedAt && (
-                                    <span className="text-xs text-blue-500 mr-2">
-                                      ✏️ {lang === "ar" ? "معدل" : "edited"}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
+                  // ✅ SHOW ALL REVIEWS (no slice)
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {approvedReviews.map((review: any, index: number) => (
+                      <div key={review.id || index} className="bg-gradient-to-br from-white to-amber-50 p-4 rounded-xl shadow border border-amber-100 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="font-bold text-amber-900 text-sm md:text-base flex items-center gap-2">
+                              {review.name || review.ar?.name || review.en?.name}
+                              {review.approved && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✅</span>}
                             </div>
-                            <div className="flex items-center gap-1">
-                              <div className="flex items-center gap-1 bg-amber-100 px-2 py-1 rounded-full">
-                                <span className="text-amber-700 font-bold text-sm md:text-base">{review.rating || 5}</span>
-                                <span className="text-lg text-amber-500">⭐</span>
+                            {review.date && (
+                              <div className="text-xs text-gray-500">
+                                {new Date(review.date).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { year: "numeric", month: "short", day: "numeric" })}
+                                {review.updatedAt && <span className="text-xs text-blue-500 mr-2"> ✏️ {lang === "ar" ? "معدل" : "edited"}</span>}
                               </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 bg-amber-100 px-2 py-1 rounded-full">
+                              <span className="text-amber-700 font-bold text-sm md:text-base">{review.rating || 5}</span>
+                              <span className="text-lg text-amber-500">⭐</span>
                             </div>
                           </div>
-
-                          <p className="text-gray-700 text-sm leading-relaxed">
-                            {review.comment || (lang === "ar" ? review.ar?.comment : review.en?.comment) || review.ar?.comment || review.en?.comment}
-                          </p>
                         </div>
-                      ))}
-                    </div>
 
-                    {/* ✅ NEW: Show all / show less button */}
-                    {approvedReviews.length > 6 && (
-                      <button
-                        onClick={() => setShowAllReviews((v) => !v)}
-                        className="w-full mt-4 p-4 bg-amber-100 text-amber-900 rounded-xl font-bold hover:bg-amber-200 transition-colors"
-                      >
-                        {showAllReviews ? (lang === "ar" ? "عرض أقل" : "Show Less") : (lang === "ar" ? "عرض كل آراء العملاء" : "Show All Reviews")}
-                        <span className="mx-2 text-amber-600 font-black">({approvedReviews.length})</span>
-                      </button>
-                    )}
-                  </>
+                        <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                          {review.comment || (lang === "ar" ? review.ar?.comment : review.en?.comment) || review.ar?.comment || review.en?.comment}
+                        </p>
+
+                        {isAdmin && (
+                          <div className="flex flex-wrap gap-2 pt-3 border-t border-amber-100">
+                            <button onClick={() => startEditReview(review)} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors">
+                              ✏️ {lang === "ar" ? "تعديل" : "Edit"}
+                            </button>
+
+                            <button onClick={() => deleteReview(review.id)} className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors">
+                              🗑️ {lang === "ar" ? "حذف" : "Delete"}
+                            </button>
+
+                            {!review.approved ? (
+                              <button onClick={() => approveReview(review.id)} className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors">
+                                ✅ {lang === "ar" ? "تفعيل" : "Approve"}
+                              </button>
+                            ) : (
+                              <button onClick={() => unapproveReview(review.id)} className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors">
+                                ⏸️ {lang === "ar" ? "إلغاء التفعيل" : "Unapprove"}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
+
             </div>
           )}
         </section>
@@ -1145,23 +1141,17 @@ Question: ${aiMessage}`,
         </div>
       </a>
 
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
-
-        .font-cairo { font-family: 'Cairo', sans-serif; }
-
+      {/* Styles */}
+      <style jsx global>{`
+        @import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap");
+        .font-cairo { font-family: "Cairo", sans-serif; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
         .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
         .line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-        .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-
-        @keyframes slide-in {
-          from { transform: translateY(-100%); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
+        @keyframes slide-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-slide-in { animation: slide-in 0.3s ease-out; }
+        @media (max-width: 640px) { .container { padding-left: 1rem; padding-right: 1rem; } }
       `}</style>
     </div>
   );
