@@ -5,17 +5,14 @@ import { PRODUCTS, TRANSLATIONS, WHATSAPP_NUMBER, INSTAGRAM_URL, FAQS, MOCK_REVI
 import { GoogleGenAI } from "@google/genai";
 
 // Review object stored in backend (Vercel KV / file / etc.)
-type ReviewObj = {
+type Review = {
   id: string;
-  name: string;
-  rating: number;
-  comment: string;
-  createdAt?: number;
-};
+  ar: { name: string; comment: string };
   en: { name: string; comment: string };
   rating: number;
   createdAt?: string;
 };
+
 
 const App: React.FC = () => {
   // Fix: Corrected the generic type syntax and closing bracket for useState
