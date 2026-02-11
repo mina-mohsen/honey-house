@@ -52,6 +52,9 @@ const App: React.FC = () => {
     comment: "",
   });
 
+  // ✅ NEW: Show all reviews toggle
+  const [showAllReviews, setShowAllReviews] = useState(false);
+
   /* ================= Review Management ================= */
   const [editingReview, setEditingReview] = useState<any>(null);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -75,7 +78,7 @@ const App: React.FC = () => {
         const savedReviews = localStorage.getItem("honeyhouse_reviews");
         if (savedReviews) {
           const parsedReviews = JSON.parse(savedReviews);
-          if (parsedReviews.length > 0) {
+          if (Array.isArray(parsedReviews) && parsedReviews.length > 0) {
             setReviews(parsedReviews);
           } else {
             setReviews(MOCK_REVIEWS);
@@ -130,19 +133,21 @@ const App: React.FC = () => {
     }, 0);
   }, [cartItems]);
 
+  // ✅ Approved reviews list
+  const approvedReviews = useMemo(() => {
+    return reviews.filter((r) => r && r.approved !== false);
+  }, [reviews]);
+
   /* Calculate average rating */
   const avgRating = useMemo(() => {
-    if (!reviews.length) return "0.0";
-    const approvedReviews = reviews.filter((r) => r.approved !== false);
     if (!approvedReviews.length) return "0.0";
     return (
       approvedReviews.reduce((a, r) => a + (r.rating || 0), 0) / approvedReviews.length
     ).toFixed(1);
-  }, [reviews]);
+  }, [approvedReviews]);
 
   /* ================= Admin Functions ================= */
   const handleAdminLogin = () => {
-    // Default admin password is "honeyadmin123"
     if (adminPassword === "honeyadmin123") {
       setIsAdmin(true);
       setShowAdminLogin(false);
@@ -202,7 +207,9 @@ const App: React.FC = () => {
 
   const approveReview = (reviewId: string) => {
     setReviews((prev) =>
-      prev.map((review) => (review.id === reviewId ? { ...review, approved: true, approvedAt: new Date().toISOString() } : review))
+      prev.map((review) =>
+        review.id === reviewId ? { ...review, approved: true, approvedAt: new Date().toISOString() } : review
+      )
     );
     setAdminMessage(lang === "ar" ? "تم تفعيل التقييم" : "Review approved");
     setTimeout(() => setAdminMessage(""), 3000);
@@ -243,6 +250,7 @@ const App: React.FC = () => {
       removeFromCart(itemId);
       return;
     }
+
     setCartItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item)));
   };
 
@@ -250,7 +258,9 @@ const App: React.FC = () => {
     setCartItems((prev) => prev.filter((item) => item.id !== itemId));
   };
 
-  const clearCart = () => setCartItems([]);
+  const clearCart = () => {
+    setCartItems([]);
+  };
 
   /* ================= Send Order via WhatsApp ================= */
   const sendOrderViaWhatsApp = () => {
@@ -336,7 +346,7 @@ Question: ${aiMessage}`,
     }
   };
 
-  /* ================= Submit Review (SEND TO WHATSAPP) ================= */
+  /* ================= Submit Review (WhatsApp) ================= */
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -345,40 +355,43 @@ Question: ${aiMessage}`,
       return;
     }
 
-    // 1) Create review object (for local view)
-    const reviewObj = {
-      id: `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name: newReview.name.trim(),
-      rating: newReview.rating,
-      comment: newReview.comment.trim(),
-      date: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      approved: true,
-    };
-
-    // 2) Add locally (same behaviour you already have)
-    const updatedReviews = [reviewObj, ...reviews];
-    setReviews(updatedReviews);
     try {
+      const nowIso = new Date().toISOString();
+      const newReviewWithId = {
+        id: `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: newReview.name.trim(),
+        rating: newReview.rating,
+        comment: newReview.comment.trim(),
+        lang: lang,
+        date: nowIso,
+        createdAt: nowIso,
+        approved: true,
+      };
+
+      // Add to local list (for same device view)
+      const updatedReviews = [newReviewWithId, ...reviews];
+      setReviews(updatedReviews);
       localStorage.setItem("honeyhouse_reviews", JSON.stringify(updatedReviews));
-    } catch {}
 
-    // 3) Send to WhatsApp (NEW)
-    const stars = "⭐".repeat(Math.max(1, Math.min(5, newReview.rating)));
-    const msg =
-      `*${lang === "ar" ? "تقييم جديد - موقع بيت العسل" : "New Review - Honey House"}*\n\n` +
-      `*${lang === "ar" ? "الاسم" : "Name"}:* ${reviewObj.name}\n` +
-      `*${lang === "ar" ? "التقييم" : "Rating"}:* ${reviewObj.rating}/5 ${stars}\n` +
-      `*${lang === "ar" ? "التعليق" : "Comment"}:*\n${reviewObj.comment}\n\n` +
-      `*${lang === "ar" ? "التاريخ" : "Date"}:* ${new Date(reviewObj.date).toLocaleString(lang === "ar" ? "ar-EG" : "en-US")}`;
+      // ✅ Send review to WhatsApp (admin collects reviews)
+      const waText =
+        `⭐ *${lang === "ar" ? "تقييم جديد - بيت العسل" : "New Review - Honey House"}*\n\n` +
+        `👤 *${lang === "ar" ? "الاسم" : "Name"}:* ${newReviewWithId.name}\n` +
+        `⭐ *${lang === "ar" ? "التقييم" : "Rating"}:* ${newReviewWithId.rating}/5\n` +
+        `📝 *${lang === "ar" ? "التعليق" : "Comment"}:* ${newReviewWithId.comment}\n` +
+        `📅 *${lang === "ar" ? "التاريخ" : "Date"}:* ${new Date(newReviewWithId.date).toLocaleString(lang === "ar" ? "ar-EG" : "en-US")}`;
 
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
+      window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(waText)}`, "_blank");
 
-    // 4) Reset form
-    setShowReviewForm(false);
-    setNewReview({ name: "", rating: 5, comment: "" });
+      // Reset form
+      setShowReviewForm(false);
+      setNewReview({ name: "", rating: 5, comment: "" });
 
-    alert(lang === "ar" ? "تم إرسال تقييمك على واتساب ✅ شكراً لك!" : "Your review was sent via WhatsApp ✅ Thank you!");
+      alert(lang === "ar" ? "تم إرسال تقييمك على واتساب ✅ شكراً لك." : "Your review was sent on WhatsApp ✅ Thank you.");
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      alert(lang === "ar" ? "حدث خطأ أثناء إرسال التقييم. يرجى المحاولة مرة أخرى." : "Error submitting review. Please try again.");
+    }
   };
 
   return (
@@ -464,11 +477,7 @@ Question: ${aiMessage}`,
                 <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "التقييم:" : "Rating:"}</label>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => setEditingReview({ ...editingReview, rating: star })}
-                      className={`text-3xl ${star <= editingReview.rating ? "text-amber-500" : "text-gray-300"}`}
-                    >
+                    <button key={star} onClick={() => setEditingReview({ ...editingReview, rating: star })} className={`text-3xl ${star <= editingReview.rating ? "text-amber-500" : "text-gray-300"}`}>
                       ⭐
                     </button>
                   ))}
@@ -524,11 +533,7 @@ Question: ${aiMessage}`,
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500 shadow-lg">
-                  <img
-                    src="https://imgur.com/tpBWWTy.jpeg"
-                    alt="بيت العسل Honey House"
-                    className="w-full h-full object-cover"
-                  />
+                  <img src="https://imgur.com/tpBWWTy.jpeg" alt="بيت العسل Honey House" className="w-full h-full object-cover" />
                 </div>
                 <div className="flex flex-col">
                   <h1 className="text-xl md:text-2xl font-black text-amber-900 leading-tight">بيت العسل</h1>
@@ -540,9 +545,7 @@ Question: ${aiMessage}`,
             <div className="flex items-center gap-2">
               {isAdmin ? (
                 <div className="flex items-center gap-2">
-                  <span className="hidden sm:inline text-sm bg-purple-100 text-purple-800 px-3 py-1 rounded-full">
-                    👑 {lang === "ar" ? "مدير" : "Admin"}
-                  </span>
+                  <span className="hidden sm:inline text-sm bg-purple-100 text-purple-800 px-3 py-1 rounded-full">👑 {lang === "ar" ? "مدير" : "Admin"}</span>
                   <button onClick={handleAdminLogout} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 text-sm">
                     {lang === "ar" ? "خروج" : "Logout"}
                   </button>
@@ -551,6 +554,7 @@ Question: ${aiMessage}`,
                 <></>
               )}
 
+              {/* Cart Button */}
               <button onClick={() => setShowOrderForm(!showOrderForm)} className="relative p-2 bg-amber-100 rounded-full hover:bg-amber-200 transition-colors">
                 <span className="text-xl">🛒</span>
                 {cartItems.length > 0 && (
@@ -560,10 +564,8 @@ Question: ${aiMessage}`,
                 )}
               </button>
 
-              <button
-                onClick={() => setLang(lang === "ar" ? "en" : "ar")}
-                className="px-3 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition-colors text-sm"
-              >
+              {/* Language Button */}
+              <button onClick={() => setLang(lang === "ar" ? "en" : "ar")} className="px-3 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition-colors text-sm">
                 {lang === "ar" ? "EN" : "العربية"}
               </button>
             </div>
@@ -575,6 +577,7 @@ Question: ${aiMessage}`,
               onClick={() => {
                 setOpenProducts(!openProducts);
                 setOpenReviews(false);
+                setShowAllReviews(false);
               }}
               className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${openProducts ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"}`}
             >
@@ -586,14 +589,15 @@ Question: ${aiMessage}`,
               onClick={() => {
                 setOpenReviews(!openReviews);
                 setOpenProducts(false);
+                setShowAllReviews(false);
               }}
               className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${openReviews ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"}`}
             >
               <span>⭐</span>
               <span className="text-sm">{lang === "ar" ? "التقييمات" : "Reviews"}</span>
-              {reviews.length > 0 && (
+              {approvedReviews.length > 0 && (
                 <span className={`text-xs px-2 py-1 rounded-full ${openReviews ? "bg-white text-amber-500" : "bg-amber-500 text-white"}`}>
-                  {reviews.filter((r) => r.approved !== false).length}
+                  {approvedReviews.length}
                 </span>
               )}
             </button>
@@ -632,6 +636,7 @@ Question: ${aiMessage}`,
                 </div>
               </div>
 
+              {/* Cart Items */}
               <div className="p-4 max-h-96 overflow-y-auto">
                 {cartItems.length === 0 ? (
                   <div className="text-center py-8">
@@ -685,6 +690,7 @@ Question: ${aiMessage}`,
                 )}
               </div>
 
+              {/* Order Summary */}
               {cartItems.length > 0 && (
                 <div className="border-t border-amber-100 p-4 bg-amber-50">
                   <div className="flex justify-between items-center mb-3">
@@ -707,6 +713,7 @@ Question: ${aiMessage}`,
                     </div>
                   )}
 
+                  {/* Order Form */}
                   <div className="space-y-4">
                     <h3 className="font-bold text-amber-900 flex items-center gap-2">
                       <span>📝</span>
@@ -831,10 +838,7 @@ Question: ${aiMessage}`,
             <div className="px-5 md:px-6 pb-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {PRODUCTS.map((product) => (
-                  <div
-                    key={product.id}
-                    className="bg-gradient-to-b from-white to-amber-50 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 border border-amber-100 overflow-hidden"
-                  >
+                  <div key={product.id} className="bg-gradient-to-b from-white to-amber-50 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 border border-amber-100 overflow-hidden">
                     <div className="relative">
                       <img
                         src={product.image}
@@ -868,11 +872,8 @@ Question: ${aiMessage}`,
                       <div>
                         <h4 className="font-bold text-amber-800 text-sm mb-2">{t.chooseSize}:</h4>
                         <div className="space-y-2">
-                          {product.prices.map((price) => (
-                            <div
-                              key={price.id}
-                              className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
-                            >
+                          {product.prices.map((price: any) => (
+                            <div key={price.id} className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors">
                               <div>
                                 <span className="font-bold text-sm">{lang === "ar" ? price.sizeAr : price.sizeEn}</span>
                                 <span className="mx-2 text-gray-400">•</span>
@@ -912,22 +913,18 @@ Question: ${aiMessage}`,
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <span className="text-2xl">⭐</span>
-                  {reviews.length > 0 && (
+                  {approvedReviews.length > 0 && (
                     <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {reviews.filter((r) => r.approved !== false).length}
+                      {approvedReviews.length}
                     </span>
                   )}
                 </div>
                 <div>
                   <h2 className="text-xl md:text-2xl font-black text-amber-900">{t.reviewsTitle}</h2>
                   <p className="text-sm text-gray-600">
-                    {lang === "ar" ? "متوسط التقييم" : "Average rating"}:{" "}
-                    <span className="font-bold text-amber-600">{avgRating}/5</span>
-                    {isAdmin && (
-                      <span className="mr-2 ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
-                        {reviews.filter((r) => r.approved !== false).length}/{reviews.length} {lang === "ar" ? "مفعل" : "approved"}
-                      </span>
-                    )}
+                    {lang === "ar" ? "متوسط التقييم" : "Average rating"}: <span className="font-bold text-amber-600">{avgRating}/5</span>
+                    <span className="mx-2">•</span>
+                    <span className="font-bold text-amber-700">{approvedReviews.length}</span> {lang === "ar" ? "مُقيم" : "reviews"}
                   </p>
                 </div>
               </div>
@@ -1005,34 +1002,20 @@ Question: ${aiMessage}`,
                 </form>
               )}
 
-              {isAdmin && reviews.length > 0 && (
-                <div className="mb-4 p-4 bg-purple-50 rounded-xl border border-purple-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-purple-600">👑</span>
-                    <h3 className="font-bold text-purple-800">{lang === "ar" ? "إدارة التقييمات" : "Review Management"}</h3>
-                  </div>
-                  <div className="text-sm text-purple-700">
-                    {lang === "ar" ? "يمكنك النقر على أي تقييم لرؤية خيارات الإدارة" : "Click on any review to see management options"}
-                  </div>
-                </div>
-              )}
-
               <div className="space-y-4">
                 {isLoadingReviews ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto"></div>
                     <p className="mt-4 text-amber-700">{t.reviewLoading}</p>
                   </div>
-                ) : reviews.filter((r) => r.approved !== false).length === 0 ? (
+                ) : approvedReviews.length === 0 ? (
                   <div className="text-center py-8 bg-amber-50 rounded-xl border border-amber-200">
                     <p className="text-gray-500">{t.reviewEmpty}</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {reviews
-                      .filter((review) => review.approved !== false)
-                      .slice(0, 6)
-                      .map((review, index) => (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(showAllReviews ? approvedReviews : approvedReviews.slice(0, 6)).map((review: any, index: number) => (
                         <div
                           key={review.id || index}
                           className="bg-gradient-to-br from-white to-amber-50 p-4 rounded-xl shadow border border-amber-100 hover:shadow-md transition-shadow"
@@ -1041,17 +1024,11 @@ Question: ${aiMessage}`,
                             <div>
                               <div className="font-bold text-amber-900 text-sm md:text-base flex items-center gap-2">
                                 {review.name || review.ar?.name || review.en?.name}
-                                {review.approved && (
-                                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✅</span>
-                                )}
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✅</span>
                               </div>
                               {review.date && (
                                 <div className="text-xs text-gray-500">
-                                  {new Date(review.date).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", {
-                                    year: "numeric",
-                                    month: "short",
-                                    day: "numeric",
-                                  })}
+                                  {new Date(review.date).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { year: "numeric", month: "short", day: "numeric" })}
                                   {review.updatedAt && (
                                     <span className="text-xs text-blue-500 mr-2">
                                       ✏️ {lang === "ar" ? "معدل" : "edited"}
@@ -1068,37 +1045,24 @@ Question: ${aiMessage}`,
                             </div>
                           </div>
 
-                          <p className="text-gray-700 text-sm leading-relaxed mb-3">
-                            {review.comment ||
-                              (lang === "ar" ? review.ar?.comment : review.en?.comment) ||
-                              review.ar?.comment ||
-                              review.en?.comment}
+                          <p className="text-gray-700 text-sm leading-relaxed">
+                            {review.comment || (lang === "ar" ? review.ar?.comment : review.en?.comment) || review.ar?.comment || review.en?.comment}
                           </p>
-
-                          {isAdmin && (
-                            <div className="flex flex-wrap gap-2 pt-3 border-t border-amber-100">
-                              <button onClick={() => startEditReview(review)} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors">
-                                ✏️ {lang === "ar" ? "تعديل" : "Edit"}
-                              </button>
-
-                              <button onClick={() => deleteReview(review.id)} className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors">
-                                🗑️ {lang === "ar" ? "حذف" : "Delete"}
-                              </button>
-
-                              {!review.approved ? (
-                                <button onClick={() => approveReview(review.id)} className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors">
-                                  ✅ {lang === "ar" ? "تفعيل" : "Approve"}
-                                </button>
-                              ) : (
-                                <button onClick={() => unapproveReview(review.id)} className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors">
-                                  ⏸️ {lang === "ar" ? "إلغاء التفعيل" : "Unapprove"}
-                                </button>
-                              )}
-                            </div>
-                          )}
                         </div>
                       ))}
-                  </div>
+                    </div>
+
+                    {/* ✅ NEW: Show all / show less button */}
+                    {approvedReviews.length > 6 && (
+                      <button
+                        onClick={() => setShowAllReviews((v) => !v)}
+                        className="w-full mt-4 p-4 bg-amber-100 text-amber-900 rounded-xl font-bold hover:bg-amber-200 transition-colors"
+                      >
+                        {showAllReviews ? (lang === "ar" ? "عرض أقل" : "Show Less") : (lang === "ar" ? "عرض كل آراء العملاء" : "Show All Reviews")}
+                        <span className="mx-2 text-amber-600 font-black">({approvedReviews.length})</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1181,18 +1145,23 @@ Question: ${aiMessage}`,
         </div>
       </a>
 
-      {/* Custom styles (Vite-safe) */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+
         .font-cairo { font-family: 'Cairo', sans-serif; }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
         .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
         .line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
         .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-        @keyframes slide-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        @keyframes slide-in {
+          from { transform: translateY(-100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
         .animate-slide-in { animation: slide-in 0.3s ease-out; }
-        @media (max-width: 640px) { .container { padding-left: 1rem; padding-right: 1rem; } }
       `}</style>
     </div>
   );
