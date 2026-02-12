@@ -19,8 +19,8 @@ type Review = {
   updatedAt?: string;
   approved?: boolean; // false => hidden
 };
-
-const ADMIN_KEY_STORAGE = "honeyhouse_admin_key_v1";
+//const ADMIN_KEY_STORAGE = "honeyhouse_admin_key_v1";
+const ADMIN_KEY_STORAGE = "24724";
 
 async function safeReadJson(res: Response) {
   const contentType = res.headers.get("content-type") || "";
