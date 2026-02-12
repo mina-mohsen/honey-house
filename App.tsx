@@ -1,3 +1,4 @@
+App.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Language, CartItem } from "./types";
 import {
@@ -19,36 +20,17 @@ type Review = {
   updatedAt?: string;
   approved?: boolean; // false => hidden
 };
-//const ADMIN_KEY_STORAGE = "honeyhouse_admin_key_v1";
-const ADMIN_KEY_STORAGE = "24724";
 
-async function safeReadJson(res: Response) {
-  const contentType = res.headers.get("content-type") || "";
-  const text = await res.text();
-
-  // لو الرد مش JSON (غالبًا HTML 404 أو Error page)
-  if (!contentType.toLowerCase().includes("application/json")) {
-    const preview = text.slice(0, 200);
-    throw new Error(
-      `API did not return JSON. Status=${res.status}. Preview: ${preview}`
-    );
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Invalid JSON received. Status=${res.status}.`);
-  }
-}
+const ADMIN_KEY_STORAGE = "honeyhouse_admin_key_v1";
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>("ar");
 
-  /* ================= Admin ================= 
+  /* ================= Admin ================= */
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminKeyInput, setAdminKeyInput] = useState("");
-  const [adminMessage, setAdminMessage] = useState("");*/
+  const [adminMessage, setAdminMessage] = useState("");
 
   /* ================= Cart / Order ================= */
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -89,7 +71,7 @@ const App: React.FC = () => {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  /* Load admin key 
+  /* Load admin key */
   useEffect(() => {
     const savedKey =
       sessionStorage.getItem(ADMIN_KEY_STORAGE) ||
@@ -100,23 +82,18 @@ const App: React.FC = () => {
   const getAdminKey = () =>
     sessionStorage.getItem(ADMIN_KEY_STORAGE) ||
     localStorage.getItem(ADMIN_KEY_STORAGE) ||
-    "";*/
+    "";
 
   /* Load reviews from KV */
   const loadReviews = async () => {
     setIsLoadingReviews(true);
     try {
-      const res = await fetch("/api/reviews", { method: "GET" });
-      const data = await safeReadJson(res);
-
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to load reviews");
-      }
-
+      const res = await fetch("/api/reviews");
+      const data = await res.json();
       const list: Review[] = Array.isArray(data?.reviews) ? data.reviews : [];
       setReviews(list);
-    } catch (e: any) {
-      // fallback لو الـ API وقع
+    } catch {
+      // fallback فقط لو الـ API وقع
       const fallback: Review[] = (MOCK_REVIEWS || []).map((r: any, idx: number) => ({
         id: r.id || `mock_${idx}`,
         name: (r.name || r?.ar?.name || r?.en?.name || "Customer") as string,
@@ -127,9 +104,6 @@ const App: React.FC = () => {
         approved: r.approved ?? true,
       }));
       setReviews(fallback);
-
-      // رسالة أوضح بدل alert مزعج
-      console.error("Reviews API error:", e?.message || e);
     } finally {
       setIsLoadingReviews(false);
     }
@@ -168,7 +142,7 @@ const App: React.FC = () => {
     return (sum / approvedReviews.length).toFixed(1);
   }, [approvedReviews]);
 
-  /* ================= Admin ================= 
+  /* ================= Admin ================= */
   const handleAdminLogin = () => {
     if (!adminKeyInput.trim()) {
       setAdminMessage(lang === "ar" ? "اكتب كود الادمن" : "Enter admin key");
@@ -219,10 +193,8 @@ const App: React.FC = () => {
           },
         }),
       });
-
-      const data = await safeReadJson(res);
+      const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Update failed");
-
       setShowEditForm(false);
       setEditingReview(null);
       setAdminMessage(lang === "ar" ? "تم تعديل التقييم ✅" : "Review updated ✅");
@@ -244,10 +216,8 @@ const App: React.FC = () => {
         },
         body: JSON.stringify({ id }),
       });
-
-      const data = await safeReadJson(res);
+      const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Delete failed");
-
       setAdminMessage(lang === "ar" ? "تم حذف التقييم ✅" : "Review deleted ✅");
       setTimeout(() => setAdminMessage(""), 2500);
       loadReviews();
@@ -266,15 +236,13 @@ const App: React.FC = () => {
         },
         body: JSON.stringify({ id, patch: { approved } }),
       });
-
-      const data = await safeReadJson(res);
+      const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Update failed");
-
       loadReviews();
     } catch (e: any) {
       alert((lang === "ar" ? "فشل التعديل: " : "Failed: ") + (e?.message || ""));
     }
-  };*/
+  };
 
   /* ================= Cart ================= */
   const addToCart = (productId: string, priceId: string, productName: string, sizeName: string) => {
@@ -379,7 +347,7 @@ const App: React.FC = () => {
         }),
       });
 
-      const data = await safeReadJson(res);
+      const data = await res.json();
       setAiResponse(data.reply || "");
     } catch {
       setAiResponse(lang === "ar" ? "خطأ في الاتصال بالذكاء الاصطناعي." : "Error connecting to AI.");
@@ -409,7 +377,7 @@ const App: React.FC = () => {
         }),
       });
 
-      const data = await safeReadJson(res);
+      const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to submit");
 
       setShowReviewForm(false);
@@ -424,7 +392,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white text-slate-900 font-cairo">
-      {/* ================= ADMIN MESSAGE ================= 
+      {/* ================= ADMIN MESSAGE ================= */}
       {adminMessage && (
         <div className="fixed top-20 right-4 left-4 md:left-auto md:right-4 z-50 animate-slide-in">
           <div className="bg-blue-500 text-white p-4 rounded-xl shadow-2xl flex items-center gap-3 max-w-md mx-auto">
@@ -434,7 +402,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      )}*/}
+      )}
 
       {/* ================= CART NOTIFICATION TOAST ================= */}
       {showCartNotification && (
@@ -449,7 +417,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* ================= ADMIN LOGIN MODAL ================= 
+      {/* ================= ADMIN LOGIN MODAL ================= */}
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
@@ -489,7 +457,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      )}*/}
+      )}
 
       {/* ================= EDIT REVIEW MODAL ================= */}
       {showEditForm && editingReview && (
@@ -561,7 +529,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      )}*/}
+      )}
 
       {/* ================= PROMO BANNER ================= */}
       <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 text-white text-center py-3 font-black text-sm md:text-base relative overflow-hidden">
@@ -687,13 +655,13 @@ const App: React.FC = () => {
               <span>{lang === "ar" ? "واتساب" : "WhatsApp"}</span>
             </a>
 
-            {/* <button
+            <button
               onClick={() => setShowAdminLogin(true)}
               className="hidden md:inline-flex px-4 py-2.5 bg-purple-100 text-purple-800 rounded-full font-black whitespace-nowrap items-center gap-2 hover:bg-purple-200 text-sm"
               title="Admin"
             >
               👑 Admin
-            </button>*/}
+            </button>
           </nav>
         </div>
       </header>
@@ -1141,7 +1109,7 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* ✅ عرض كل التقييمات */}
+                    {/* ✅ هنا بنعرض كل التقييمات */}
                     {approvedReviews.map((review, index) => (
                       <div
                         key={review.id || index}
@@ -1271,12 +1239,12 @@ const App: React.FC = () => {
                 {t.english}
               </button>
 
-              {/* <button
+              <button
                 onClick={() => (isAdmin ? handleAdminLogout() : setShowAdminLogin(true))}
                 className="px-4 py-2 rounded-lg bg-purple-700 hover:bg-purple-600 transition-colors text-sm font-bold"
               >
                 {isAdmin ? (lang === "ar" ? "خروج ادمن" : "Admin Logout") : (lang === "ar" ? "دخول ادمن" : "Admin Login")}
-              </button>*/}
+              </button>
             </div>
 
             <p className="text-sm opacity-60">© {new Date().getFullYear()} بيت العسل. {t.copyright}.</p>
