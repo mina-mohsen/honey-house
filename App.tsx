@@ -9,15 +9,26 @@ import {
   DELIVERY_INFO,
 } from "./constants";
 
-const REVIEWS_API = "/api/reviews";
+type Review = {
+  id: string;
+  name: string;
+  rating: number;
+  comment: string;
+  lang: Language;
+  createdAt: string;
+  updatedAt?: string;
+  approved?: boolean; // false => hidden
+};
+
+const ADMIN_KEY_STORAGE = "honeyhouse_admin_key_v1";
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>("ar");
 
-  /* ================= Admin Authentication ================= */
+  /* ================= Admin ================= */
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
+  const [adminKeyInput, setAdminKeyInput] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
 
   /* ================= Cart / Order ================= */
@@ -27,7 +38,6 @@ const App: React.FC = () => {
   const [showCartNotification, setShowCartNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
 
-  // Refs for form validation focus
   const nameInputRef = useRef<HTMLInputElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const locationInputRef = useRef<HTMLTextAreaElement>(null);
@@ -38,14 +48,15 @@ const App: React.FC = () => {
   const [isAiThinking, setIsAiThinking] = useState(false);
 
   /* ================= Reviews ================= */
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [openReviews, setOpenReviews] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+
   const [newReview, setNewReview] = useState({ name: "", rating: 5, comment: "" });
 
-  /* ================= Review Management ================= */
-  const [editingReview, setEditingReview] = useState<any>(null);
+  /* ================= Review Edit ================= */
+  const [editingReview, setEditingReview] = useState<Review | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
 
   /* ================= Products ================= */
@@ -59,39 +70,39 @@ const App: React.FC = () => {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  /* =============== Load Reviews (Server first, fallback local) =============== */
+  /* Load admin key */
+  useEffect(() => {
+    const savedKey =
+      sessionStorage.getItem(ADMIN_KEY_STORAGE) ||
+      localStorage.getItem(ADMIN_KEY_STORAGE);
+    if (savedKey) setIsAdmin(true);
+  }, []);
+
+  const getAdminKey = () =>
+    sessionStorage.getItem(ADMIN_KEY_STORAGE) ||
+    localStorage.getItem(ADMIN_KEY_STORAGE) ||
+    "";
+
+  /* Load reviews from KV */
   const loadReviews = async () => {
     setIsLoadingReviews(true);
     try {
-      const r = await fetch(REVIEWS_API, { method: "GET" });
-      if (!r.ok) throw new Error("Failed to load reviews from API");
-      const data = await r.json();
-      const apiReviews = Array.isArray(data?.reviews) ? data.reviews : [];
-
-      if (apiReviews.length > 0) {
-        setReviews(apiReviews);
-        // optional local cache
-        try {
-          localStorage.setItem("honeyhouse_reviews_cache", JSON.stringify(apiReviews));
-        } catch {}
-      } else {
-        // if API empty, fallback to mock (and keep UI not empty)
-        setReviews(MOCK_REVIEWS);
-      }
-    } catch (e) {
-      // fallback local cache then mock
-      try {
-        const cached = localStorage.getItem("honeyhouse_reviews_cache");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length) {
-            setReviews(parsed);
-            setIsLoadingReviews(false);
-            return;
-          }
-        }
-      } catch {}
-      setReviews(MOCK_REVIEWS);
+      const res = await fetch("/api/reviews");
+      const data = await res.json();
+      const list: Review[] = Array.isArray(data?.reviews) ? data.reviews : [];
+      setReviews(list);
+    } catch {
+      // fallback فقط لو الـ API وقع
+      const fallback: Review[] = (MOCK_REVIEWS || []).map((r: any, idx: number) => ({
+        id: r.id || `mock_${idx}`,
+        name: (r.name || r?.ar?.name || r?.en?.name || "Customer") as string,
+        rating: Number(r.rating || 5),
+        comment: (r.comment || r?.ar?.comment || r?.en?.comment || "") as string,
+        lang: (r.lang || "ar") as Language,
+        createdAt: r.createdAt || new Date().toISOString(),
+        approved: r.approved ?? true,
+      }));
+      setReviews(fallback);
     } finally {
       setIsLoadingReviews(false);
     }
@@ -99,15 +110,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     loadReviews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Show cart notification */
+  /* Toast auto-hide */
   useEffect(() => {
-    if (showCartNotification) {
-      const timer = setTimeout(() => setShowCartNotification(false), 3000);
-      return () => clearTimeout(timer);
-    }
+    if (!showCartNotification) return;
+    const timer = setTimeout(() => setShowCartNotification(false), 3000);
+    return () => clearTimeout(timer);
   }, [showCartNotification]);
 
   /* Calculate total price */
@@ -121,95 +130,136 @@ const App: React.FC = () => {
     }, 0);
   }, [cartItems]);
 
-  /* Calculate average rating + count */
-  const approvedReviews = useMemo(() => reviews.filter((r) => r.approved !== false), [reviews]);
+  const approvedReviews = useMemo(
+    () => reviews.filter((r) => r.approved !== false),
+    [reviews]
+  );
 
   const avgRating = useMemo(() => {
     if (!approvedReviews.length) return "0.0";
-    return (
-      approvedReviews.reduce((a, r) => a + (Number(r.rating) || 0), 0) / approvedReviews.length
-    ).toFixed(1);
+    const sum = approvedReviews.reduce((a, r) => a + (r.rating || 0), 0);
+    return (sum / approvedReviews.length).toFixed(1);
   }, [approvedReviews]);
 
-  const approvedCount = approvedReviews.length;
-
-  /* ================= Admin Functions ================= */
+  /* ================= Admin ================= */
   const handleAdminLogin = () => {
-    if (adminPassword === "honeyadmin123") {
-      setIsAdmin(true);
-      setShowAdminLogin(false);
-      setAdminPassword("");
-      setAdminMessage(lang === "ar" ? "تم تسجيل الدخول بنجاح كمدير" : "Logged in successfully as admin");
-      setTimeout(() => setAdminMessage(""), 3000);
-    } else {
-      setAdminMessage(lang === "ar" ? "كلمة المرور غير صحيحة" : "Incorrect password");
+    if (!adminKeyInput.trim()) {
+      setAdminMessage(lang === "ar" ? "اكتب كود الادمن" : "Enter admin key");
+      return;
     }
+    sessionStorage.setItem(ADMIN_KEY_STORAGE, adminKeyInput.trim());
+    localStorage.setItem(ADMIN_KEY_STORAGE, adminKeyInput.trim());
+    setIsAdmin(true);
+    setShowAdminLogin(false);
+    setAdminKeyInput("");
+    setAdminMessage(lang === "ar" ? "تم تسجيل الدخول كمدير ✅" : "Logged in as admin ✅");
+    setTimeout(() => setAdminMessage(""), 2500);
   };
 
   const handleAdminLogout = () => {
+    sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+    localStorage.removeItem(ADMIN_KEY_STORAGE);
     setIsAdmin(false);
-    setAdminMessage(lang === "ar" ? "تم تسجيل الخروج" : "Logged out successfully");
-    setTimeout(() => setAdminMessage(""), 3000);
+    setAdminMessage(lang === "ar" ? "تم تسجيل الخروج" : "Logged out");
+    setTimeout(() => setAdminMessage(""), 2500);
   };
 
-  /* ================= Review Management Functions (Local UI only) ================= */
-  const startEditReview = (review: any) => {
+  const startEditReview = (review: Review) => {
     setEditingReview({ ...review });
     setShowEditForm(true);
     setShowReviewForm(false);
   };
 
-  const saveEditReview = () => {
-    if (!editingReview?.name?.trim() || !editingReview?.comment?.trim()) {
-      alert(lang === "ar" ? "الرجاء ملء جميع الحقول المطلوبة." : "Please fill all required fields.");
+  const saveEditReview = async () => {
+    if (!editingReview) return;
+    if (!editingReview.name.trim() || !editingReview.comment.trim()) {
+      alert(lang === "ar" ? "املأ الاسم والتعليق." : "Please fill name and comment.");
       return;
     }
-
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === editingReview.id
-          ? { ...editingReview, name: editingReview.name.trim(), comment: editingReview.comment.trim(), updatedAt: new Date().toISOString() }
-          : r
-      )
-    );
-
-    setShowEditForm(false);
-    setEditingReview(null);
-    setAdminMessage(lang === "ar" ? "تم تعديل التقييم (محليًا)" : "Review updated (locally)");
-    setTimeout(() => setAdminMessage(""), 3000);
-  };
-
-  const deleteReview = (reviewId: string) => {
-    if (window.confirm(lang === "ar" ? "هل أنت متأكد من حذف هذا التقييم؟" : "Are you sure you want to delete this review?")) {
-      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
-      setAdminMessage(lang === "ar" ? "تم حذف التقييم (محليًا)" : "Review deleted (locally)");
-      setTimeout(() => setAdminMessage(""), 3000);
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": getAdminKey(),
+        },
+        body: JSON.stringify({
+          id: editingReview.id,
+          patch: {
+            name: editingReview.name.trim(),
+            comment: editingReview.comment.trim(),
+            rating: editingReview.rating,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Update failed");
+      setShowEditForm(false);
+      setEditingReview(null);
+      setAdminMessage(lang === "ar" ? "تم تعديل التقييم ✅" : "Review updated ✅");
+      setTimeout(() => setAdminMessage(""), 2500);
+      loadReviews();
+    } catch (e: any) {
+      alert((lang === "ar" ? "فشل تعديل التقييم: " : "Failed to update: ") + (e?.message || ""));
     }
   };
 
-  const approveReview = (reviewId: string) => {
-    setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, approved: true, approvedAt: new Date().toISOString() } : r)));
-    setAdminMessage(lang === "ar" ? "تم تفعيل التقييم (محليًا)" : "Review approved (locally)");
-    setTimeout(() => setAdminMessage(""), 3000);
+  const deleteReview = async (id: string) => {
+    if (!window.confirm(lang === "ar" ? "متأكد تحذف التقييم؟" : "Delete this review?")) return;
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": getAdminKey(),
+        },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Delete failed");
+      setAdminMessage(lang === "ar" ? "تم حذف التقييم ✅" : "Review deleted ✅");
+      setTimeout(() => setAdminMessage(""), 2500);
+      loadReviews();
+    } catch (e: any) {
+      alert((lang === "ar" ? "فشل الحذف: " : "Failed to delete: ") + (e?.message || ""));
+    }
   };
 
-  const unapproveReview = (reviewId: string) => {
-    setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, approved: false } : r)));
-    setAdminMessage(lang === "ar" ? "تم إلغاء تفعيل التقييم (محليًا)" : "Review unapproved (locally)");
-    setTimeout(() => setAdminMessage(""), 3000);
+  const toggleApprove = async (id: string, approved: boolean) => {
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": getAdminKey(),
+        },
+        body: JSON.stringify({ id, patch: { approved } }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Update failed");
+      loadReviews();
+    } catch (e: any) {
+      alert((lang === "ar" ? "فشل التعديل: " : "Failed: ") + (e?.message || ""));
+    }
   };
 
-  /* ================= Cart Functions ================= */
+  /* ================= Cart ================= */
   const addToCart = (productId: string, priceId: string, productName: string, sizeName: string) => {
-    const existingItem = cartItems.find((item) => item.productId === productId && item.priceId === priceId);
+    const existingItem = cartItems.find((i) => i.productId === productId && i.priceId === priceId);
 
     if (existingItem) {
-      setCartItems((prev) => prev.map((item) => (item.id === existingItem.id ? { ...item, quantity: item.quantity + 1 } : item)));
-      setNotificationMessage(`${lang === "ar" ? "تم زيادة الكمية لـ" : "Increased quantity for"} ${productName} (${sizeName})`);
+      setCartItems((prev) =>
+        prev.map((it) => (it.id === existingItem.id ? { ...it, quantity: it.quantity + 1 } : it))
+      );
+      setNotificationMessage(
+        `${lang === "ar" ? "تم زيادة الكمية لـ" : "Increased quantity for"} ${productName} (${sizeName})`
+      );
     } else {
       const newItem: CartItem = { id: `${productId}_${priceId}_${Date.now()}`, productId, priceId, quantity: 1 };
       setCartItems((prev) => [...prev, newItem]);
-      setNotificationMessage(`${lang === "ar" ? "تم إضافة" : "Added"} ${productName} (${sizeName}) ${lang === "ar" ? "إلى السلة" : "to cart"}`);
+      setNotificationMessage(
+        `${lang === "ar" ? "تم إضافة" : "Added"} ${productName} (${sizeName}) ${lang === "ar" ? "إلى السلة" : "to cart"}`
+      );
     }
 
     setShowCartNotification(true);
@@ -218,16 +268,16 @@ const App: React.FC = () => {
 
   const updateQuantity = (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) {
-      removeFromCart(itemId);
+      setCartItems((prev) => prev.filter((i) => i.id !== itemId));
       return;
     }
-    setCartItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item)));
+    setCartItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, quantity: newQuantity } : i)));
   };
 
-  const removeFromCart = (itemId: string) => setCartItems((prev) => prev.filter((item) => item.id !== itemId));
+  const removeFromCart = (itemId: string) => setCartItems((prev) => prev.filter((i) => i.id !== itemId));
   const clearCart = () => setCartItems([]);
 
-  /* ================= Send Order via WhatsApp ================= */
+  /* ================= WhatsApp Order ================= */
   const sendOrderViaWhatsApp = () => {
     if (!orderForm.name.trim()) {
       alert(lang === "ar" ? "الرجاء إدخال اسم العميل" : "Please enter customer name");
@@ -257,23 +307,27 @@ const App: React.FC = () => {
 
     cartItems.forEach((item) => {
       const product = PRODUCTS.find((p) => p.id === item.productId);
-      const price = product?.prices.find((p) => p.id === item.priceId);
-      if (product && price) {
-        message += `- ${lang === "ar" ? product.titleAr : product.titleEn} (${lang === "ar" ? price.sizeAr : price.sizeEn}) x${item.quantity}: ${price.price * item.quantity} ${t.currency}\n`;
-      }
+      if (!product) return;
+      const price = product.prices.find((p) => p.id === item.priceId);
+      if (!price) return;
+      message += `- ${lang === "ar" ? product.titleAr : product.titleEn} (${lang === "ar" ? price.sizeAr : price.sizeEn}) x${item.quantity}: ${
+        price.price * item.quantity
+      } ${t.currency}\n`;
     });
 
     message += `\n*${t.whatsappTotal}* ${totalPrice} ${t.currency}`;
 
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank");
+    const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank");
 
     clearCart();
     setShowOrderForm(false);
     setOrderForm({ name: "", phone: "", location: "" });
-    alert(lang === "ar" ? "تم إرسال الطلب بنجاح! سنتواصل معك قريباً." : "Order sent successfully! We'll contact you soon.");
+
+    alert(lang === "ar" ? "تم إرسال الطلب بنجاح ✅" : "Order sent successfully ✅");
   };
 
-  /* ================= AI Consultation ================= */
+  /* ================= AI ================= */
   const handleAiConsult = async () => {
     if (!aiMessage.trim()) {
       alert(lang === "ar" ? "الرجاء كتابة سؤال" : "Please enter a question");
@@ -288,10 +342,7 @@ const App: React.FC = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: `You are a professional honey expert.
-Explain in detail (6–10 sentences).
-User language: ${lang}.
-Question: ${aiMessage}`,
+          message: `You are a professional honey expert.\nExplain in detail (6–10 sentences), practical tips, and short bullet points if helpful.\nUser language: ${lang}.\nQuestion: ${aiMessage}`,
         }),
       });
 
@@ -304,7 +355,7 @@ Question: ${aiMessage}`,
     }
   };
 
-  /* ================= Submit Review (SERVER) ================= */
+  /* ================= Submit Review -> KV ================= */
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -314,7 +365,7 @@ Question: ${aiMessage}`,
     }
 
     try {
-      const r = await fetch(REVIEWS_API, {
+      const res = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -325,52 +376,16 @@ Question: ${aiMessage}`,
         }),
       });
 
-      if (!r.ok) throw new Error("Failed to submit review");
-
-      const data = await r.json();
-      const created = data?.review;
-
-      // optimistic update
-      if (created) {
-        const updated = [created, ...reviews];
-        setReviews(updated);
-        try {
-          localStorage.setItem("honeyhouse_reviews_cache", JSON.stringify(updated));
-        } catch {}
-      } else {
-        await loadReviews();
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to submit");
 
       setShowReviewForm(false);
       setNewReview({ name: "", rating: 5, comment: "" });
 
-      alert(lang === "ar" ? "تم إرسال تقييمك بنجاح! شكراً لك." : "Review submitted successfully! Thank you.");
-    } catch (err) {
-      // fallback: local only
-      const fallback = {
-        id: `review_local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        name: newReview.name.trim(),
-        rating: newReview.rating,
-        comment: newReview.comment.trim(),
-        lang,
-        date: new Date().toISOString(),
-        approved: true,
-      };
-      const updated = [fallback, ...reviews];
-      setReviews(updated);
-      try {
-        localStorage.setItem("honeyhouse_reviews_cache", JSON.stringify(updated));
-      } catch {}
-
-      setShowReviewForm(false);
-      setNewReview({ name: "", rating: 5, comment: "" });
-
-      alert(
-        lang === "ar"
-          ? "تم حفظ التقييم مؤقتًا على جهازك (تعذر الاتصال بالسيرفر)."
-          : "Saved locally (server not reachable)."
-      );
-      console.error(err);
+      await loadReviews();
+      alert(lang === "ar" ? "تم إرسال تقييمك بنجاح! 🙏" : "Review submitted successfully! 🙏");
+    } catch (error: any) {
+      alert((lang === "ar" ? "حدث خطأ: " : "Error: ") + (error?.message || ""));
     }
   };
 
@@ -395,7 +410,7 @@ Question: ${aiMessage}`,
             <span className="text-2xl">✅</span>
             <div>
               <p className="font-bold">{notificationMessage}</p>
-              <p className="text-sm opacity-90">{lang === "ar" ? "تمت الإضافة إلى سلة الطلبات" : "Added to shopping cart"}</p>
+              <p className="text-sm opacity-90">{lang === "ar" ? "تمت الإضافة إلى سلة الطلبات" : "Added to cart"}</p>
             </div>
           </div>
         </div>
@@ -405,28 +420,33 @@ Question: ${aiMessage}`,
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-black text-amber-900 mb-4">{lang === "ar" ? "تسجيل الدخول كمدير" : "Admin Login"}</h3>
+            <h3 className="text-xl font-black text-amber-900 mb-4">
+              {lang === "ar" ? "تسجيل الدخول كمدير" : "Admin Login"}
+            </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "كلمة المرور:" : "Password:"}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Admin Key:</label>
                 <input
                   type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder={lang === "ar" ? "أدخل كلمة المرور" : "Enter password"}
+                  value={adminKeyInput}
+                  onChange={(e) => setAdminKeyInput(e.target.value)}
+                  placeholder={lang === "ar" ? "اكتب الكود" : "Enter key"}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                  onKeyPress={(e) => e.key === "Enter" && handleAdminLogin()}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
                 />
               </div>
-              <div className="text-xs text-gray-500 mb-4">{lang === "ar" ? "كلمة المرور الافتراضية: honeyadmin123" : "Default password: honeyadmin123"}</div>
+
               <div className="flex gap-3">
-                <button onClick={handleAdminLogin} className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600">
-                  {lang === "ar" ? "تسجيل الدخول" : "Login"}
+                <button
+                  onClick={handleAdminLogin}
+                  className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600"
+                >
+                  {lang === "ar" ? "دخول" : "Login"}
                 </button>
                 <button
                   onClick={() => {
                     setShowAdminLogin(false);
-                    setAdminPassword("");
+                    setAdminKeyInput("");
                   }}
                   className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300"
                 >
@@ -442,10 +462,14 @@ Question: ${aiMessage}`,
       {showEditForm && editingReview && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-black text-amber-900 mb-4">{lang === "ar" ? "تعديل التقييم" : "Edit Review"}</h3>
+            <h3 className="text-xl font-black text-amber-900 mb-4">
+              {lang === "ar" ? "تعديل التقييم" : "Edit Review"}
+            </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "الاسم:" : "Name:"}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {lang === "ar" ? "الاسم:" : "Name:"}
+                </label>
                 <input
                   type="text"
                   value={editingReview.name}
@@ -453,23 +477,29 @@ Question: ${aiMessage}`,
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "التقييم:" : "Rating:"}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {lang === "ar" ? "التقييم:" : "Rating:"}
+                </label>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
-                      type="button"
                       key={star}
+                      type="button"
                       onClick={() => setEditingReview({ ...editingReview, rating: star })}
-                      className={`text-3xl ${star <= (editingReview.rating || 5) ? "text-amber-500" : "text-gray-300"}`}
+                      className={`text-3xl ${star <= editingReview.rating ? "text-amber-500" : "text-gray-300"}`}
                     >
                       ⭐
                     </button>
                   ))}
                 </div>
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{lang === "ar" ? "التعليق:" : "Comment:"}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {lang === "ar" ? "التعليق:" : "Comment:"}
+                </label>
                 <textarea
                   value={editingReview.comment}
                   onChange={(e) => setEditingReview({ ...editingReview, comment: e.target.value })}
@@ -477,9 +507,13 @@ Question: ${aiMessage}`,
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 />
               </div>
+
               <div className="flex gap-3">
-                <button onClick={saveEditReview} className="flex-1 px-4 py-3 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600">
-                  {lang === "ar" ? "حفظ التعديلات" : "Save Changes"}
+                <button
+                  onClick={saveEditReview}
+                  className="flex-1 px-4 py-3 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600"
+                >
+                  {lang === "ar" ? "حفظ" : "Save"}
                 </button>
                 <button
                   onClick={() => {
@@ -497,15 +531,25 @@ Question: ${aiMessage}`,
       )}
 
       {/* ================= PROMO BANNER ================= */}
-      <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-center py-3 font-black text-sm md:text-base">
-        <div className="flex items-center justify-center gap-2 flex-wrap px-2">
-          <span>🚚</span>
-          <span>
-            {lang === "ar" ? "توصيل خلال" : "Delivery within"} <b>24h – 48h</b>
+      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 text-white text-center py-3 font-black text-sm md:text-base relative overflow-hidden">
+        <div className="absolute inset-0 opacity-30 animate-pulse bg-[radial-gradient(circle_at_20%_30%,white,transparent_40%),radial-gradient(circle_at_80%_70%,white,transparent_40%)]" />
+        <div className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-3">
+          <span className="inline-flex items-center gap-2">
+            <span className="text-lg">🚚</span>
+            <span className="drop-shadow-sm">
+              {lang === "ar" ? "توصيل خلال" : "Delivery within"}{" "}
+              <b className="underline decoration-white/70">24h – 48h</b>
+            </span>
           </span>
-          <span className="hidden sm:inline"> | </span>
-          <span className="block sm:inline">
-            {lang === "ar" ? "توصيل مجاني فوق" : "Free delivery over"} <b>{DELIVERY_INFO.FREE_THRESHOLD} {t.currency}</b>
+          <span className="opacity-90 hidden sm:inline">|</span>
+          <span className="inline-flex items-center gap-2">
+            <span className="text-lg">🎁</span>
+            <span className="drop-shadow-sm">
+              {lang === "ar" ? "توصيل مجاني فوق" : "Free delivery over"}{" "}
+              <b className="underline decoration-white/70">
+                {DELIVERY_INFO.FREE_THRESHOLD} {t.currency}
+              </b>
+            </span>
           </span>
         </div>
       </div>
@@ -518,7 +562,11 @@ Question: ${aiMessage}`,
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500 shadow-lg">
-                  <img src="https://imgur.com/tpBWWTy.jpeg" alt="بيت العسل Honey House" className="w-full h-full object-cover" />
+                  <img
+                    src="https://imgur.com/tpBWWTy.jpeg"
+                    alt="بيت العسل Honey House"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div className="flex flex-col">
                   <h1 className="text-xl md:text-2xl font-black text-amber-900 leading-tight">بيت العسل</h1>
@@ -529,20 +577,24 @@ Question: ${aiMessage}`,
 
             <div className="flex items-center gap-2">
               {isAdmin ? (
-                <div className="flex items-center gap-2">
-                  <span className="hidden sm:inline text-sm bg-purple-100 text-purple-800 px-3 py-1 rounded-full">
+                <div className="hidden sm:flex items-center gap-2">
+                  <span className="text-sm bg-purple-100 text-purple-800 px-3 py-1 rounded-full">
                     👑 {lang === "ar" ? "مدير" : "Admin"}
                   </span>
-                  <button onClick={handleAdminLogout} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 text-sm">
+                  <button
+                    onClick={handleAdminLogout}
+                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 text-sm"
+                  >
                     {lang === "ar" ? "خروج" : "Logout"}
                   </button>
                 </div>
-              ) : (
-                <></>
-              )}
+              ) : null}
 
               {/* Cart Button */}
-              <button onClick={() => setShowOrderForm(!showOrderForm)} className="relative p-2 bg-amber-100 rounded-full hover:bg-amber-200 transition-colors">
+              <button
+                onClick={() => setShowOrderForm(!showOrderForm)}
+                className="relative p-2 bg-amber-100 rounded-full hover:bg-amber-200 transition-colors"
+              >
                 <span className="text-xl">🛒</span>
                 {cartItems.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
@@ -552,7 +604,10 @@ Question: ${aiMessage}`,
               </button>
 
               {/* Language Button */}
-              <button onClick={() => setLang(lang === "ar" ? "en" : "ar")} className="px-3 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition-colors text-sm">
+              <button
+                onClick={() => setLang(lang === "ar" ? "en" : "ar")}
+                className="px-3 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition-colors text-sm"
+              >
                 {lang === "ar" ? "EN" : "العربية"}
               </button>
             </div>
@@ -565,42 +620,47 @@ Question: ${aiMessage}`,
                 setOpenProducts(!openProducts);
                 setOpenReviews(false);
               }}
-              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${
-                openProducts ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"
+              className={`px-5 py-2.5 rounded-full font-black whitespace-nowrap flex items-center gap-2 text-sm ${
+                openProducts ? "bg-amber-500 text-white shadow" : "bg-amber-100 text-amber-900"
               }`}
             >
-              <span>🍯</span>
-              <span className="text-sm">{lang === "ar" ? "المنتجات" : "Products"}</span>
+              <span className="text-lg">🍯</span>
+              <span>{lang === "ar" ? "المنتجات" : "Products"}</span>
             </button>
 
             <button
               onClick={() => {
                 setOpenReviews(!openReviews);
                 setOpenProducts(false);
-                if (!openReviews) loadReviews(); // refresh when opening
               }}
-              className={`px-4 py-2 rounded-full font-bold whitespace-nowrap flex items-center gap-2 ${
-                openReviews ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-900"
+              className={`px-5 py-2.5 rounded-full font-black whitespace-nowrap flex items-center gap-2 text-sm ${
+                openReviews ? "bg-amber-500 text-white shadow" : "bg-amber-100 text-amber-900"
               }`}
             >
-              <span>⭐</span>
-              <span className="text-sm">{lang === "ar" ? "التقييمات" : "Reviews"}</span>
-              {approvedCount > 0 && (
-                <span className={`text-xs px-2 py-1 rounded-full ${openReviews ? "bg-white text-amber-500" : "bg-amber-500 text-white"}`}>
-                  {approvedCount}
-                </span>
-              )}
+              <span className="text-lg">⭐</span>
+              <span>{lang === "ar" ? "آراء العملاء" : "Reviews"}</span>
+              <span className={`text-xs px-2 py-1 rounded-full ${openReviews ? "bg-white text-amber-500" : "bg-amber-500 text-white"}`}>
+                {approvedReviews.length}
+              </span>
             </button>
 
             <a
               href={`https://wa.me/${WHATSAPP_NUMBER}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 bg-green-500 text-white rounded-full font-bold whitespace-nowrap flex items-center gap-2 hover:bg-green-600"
+              className="px-5 py-2.5 bg-green-500 text-white rounded-full font-black whitespace-nowrap flex items-center gap-2 hover:bg-green-600 text-sm"
             >
-              <span>📱</span>
-              <span className="text-sm">{lang === "ar" ? "واتساب" : "WhatsApp"}</span>
+              <span className="text-lg">📱</span>
+              <span>{lang === "ar" ? "واتساب" : "WhatsApp"}</span>
             </a>
+
+            <button
+              onClick={() => setShowAdminLogin(true)}
+              className="hidden md:inline-flex px-4 py-2.5 bg-purple-100 text-purple-800 rounded-full font-black whitespace-nowrap items-center gap-2 hover:bg-purple-200 text-sm"
+              title="Admin"
+            >
+              👑 Admin
+            </button>
           </nav>
         </div>
       </header>
@@ -612,14 +672,22 @@ Question: ${aiMessage}`,
             <div className="bg-white rounded-2xl shadow-xl border border-amber-200 overflow-hidden">
               <div className="p-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-black flex items-center gap-2">🛒 {lang === "ar" ? "سلة الطلبات" : "Shopping Cart"}</h2>
+                  <h2 className="text-xl font-black flex items-center gap-2">
+                    🛒 {lang === "ar" ? "سلة الطلبات" : "Shopping Cart"}
+                  </h2>
                   <div className="flex items-center gap-2">
                     {cartItems.length > 0 && (
-                      <button onClick={clearCart} className="px-3 py-1 bg-white/20 text-white rounded-lg hover:bg-white/30 text-sm">
+                      <button
+                        onClick={clearCart}
+                        className="px-3 py-1 bg-white/20 text-white rounded-lg hover:bg-white/30 text-sm"
+                      >
                         {lang === "ar" ? "إفراغ السلة" : "Clear All"}
                       </button>
                     )}
-                    <button onClick={() => setShowOrderForm(false)} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30">
+                    <button
+                      onClick={() => setShowOrderForm(false)}
+                      className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30"
+                    >
                       ✕
                     </button>
                   </div>
@@ -631,8 +699,12 @@ Question: ${aiMessage}`,
                 {cartItems.length === 0 ? (
                   <div className="text-center py-8">
                     <div className="text-5xl mb-4">🛒</div>
-                    <p className="text-gray-500 text-lg font-bold">{lang === "ar" ? "سلة التسوق فارغة" : "Your cart is empty"}</p>
-                    <p className="text-gray-400 mt-2">{lang === "ar" ? "أضف منتجات من قسم المنتجات" : "Add products from the products section"}</p>
+                    <p className="text-gray-500 text-lg font-bold">
+                      {lang === "ar" ? "سلة التسوق فارغة" : "Your cart is empty"}
+                    </p>
+                    <p className="text-gray-400 mt-2">
+                      {lang === "ar" ? "أضف منتجات من قسم المنتجات" : "Add products from the products section"}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -645,7 +717,9 @@ Question: ${aiMessage}`,
                         <div key={item.id} className="bg-amber-50 rounded-xl p-3 border border-amber-100">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
-                              <h3 className="font-bold text-amber-900 text-sm md:text-base">{lang === "ar" ? product.titleAr : product.titleEn}</h3>
+                              <h3 className="font-bold text-amber-900 text-sm md:text-base">
+                                {lang === "ar" ? product.titleAr : product.titleEn}
+                              </h3>
                               <p className="text-xs text-gray-600">
                                 {lang === "ar" ? price.sizeAr : price.sizeEn} • {price.price} {t.currency}
                               </p>
@@ -653,20 +727,32 @@ Question: ${aiMessage}`,
 
                             <div className="flex items-center gap-3">
                               <div className="flex items-center gap-2 bg-white rounded-full px-2 py-1">
-                                <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200">
+                                <button
+                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                  className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+                                >
                                   −
                                 </button>
                                 <span className="font-bold w-6 text-center">{item.quantity}</span>
-                                <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200">
+                                <button
+                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+                                >
                                   +
                                 </button>
                               </div>
 
                               <div className="text-right min-w-20">
-                                <p className="font-bold text-green-600">{price.price * item.quantity} {t.currency}</p>
+                                <p className="font-bold text-green-600">
+                                  {price.price * item.quantity} {t.currency}
+                                </p>
                               </div>
 
-                              <button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-700 p-1">
+                              <button
+                                onClick={() => removeFromCart(item.id)}
+                                className="text-red-500 hover:text-red-700 p-1"
+                                aria-label="remove"
+                              >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -697,7 +783,9 @@ Question: ${aiMessage}`,
                     <div className="flex items-center gap-2 p-3 bg-amber-100 text-amber-800 rounded-lg mb-4">
                       <span className="text-xl">📦</span>
                       <span className="text-sm">
-                        {lang === "ar" ? "أضف" : "Add"} <span className="font-bold">{DELIVERY_INFO.FREE_THRESHOLD - totalPrice} {t.currency}</span> {lang === "ar" ? "أخرى للحصول على توصيل مجاني" : "more for free delivery"}
+                        {lang === "ar" ? "أضف" : "Add"}{" "}
+                        <span className="font-bold">{DELIVERY_INFO.FREE_THRESHOLD - totalPrice} {t.currency}</span>{" "}
+                        {lang === "ar" ? "أخرى للحصول على توصيل مجاني" : "more for free delivery"}
                       </span>
                     </div>
                   )}
@@ -756,7 +844,10 @@ Question: ${aiMessage}`,
                         <span>{t.sendOrder}</span>
                       </button>
 
-                      <button onClick={() => setShowOrderForm(false)} className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 transition-colors">
+                      <button
+                        onClick={() => setShowOrderForm(false)}
+                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 transition-colors"
+                      >
                         {lang === "ar" ? "إغلاق" : "Close"}
                       </button>
                     </div>
@@ -780,7 +871,7 @@ Question: ${aiMessage}`,
                 onChange={(e) => setAiMessage(e.target.value)}
                 placeholder={lang === "ar" ? "اسأل عن العسل، الفوائد، التخزين..." : "Ask about honey, benefits, storage..."}
                 className="flex-1 p-4 rounded-xl text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm md:text-base"
-                onKeyPress={(e) => e.key === "Enter" && handleAiConsult()}
+                onKeyDown={(e) => e.key === "Enter" && handleAiConsult()}
               />
               <button
                 onClick={handleAiConsult}
@@ -846,18 +937,41 @@ Question: ${aiMessage}`,
                     </div>
 
                     <div className="p-4">
-                      <h3 className="font-black text-lg mb-2 text-amber-900 line-clamp-1">{lang === "ar" ? product.titleAr : product.titleEn}</h3>
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">{lang === "ar" ? product.descriptionAr : product.descriptionEn}</p>
+                      <h3 className="font-black text-lg mb-2 text-amber-900 line-clamp-1">
+                        {lang === "ar" ? product.titleAr : product.titleEn}
+                      </h3>
+
+                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                        {lang === "ar" ? product.descriptionAr : product.descriptionEn}
+                      </p>
+
+                      <div className="mb-4">
+                        <h4 className="font-bold text-amber-800 text-sm mb-2">
+                          {lang === "ar" ? "الفوائد:" : "Benefits:"}
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {(lang === "ar" ? product.benefitsAr : product.benefitsEn).slice(0, 2).map((benefit, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-amber-100 text-amber-800 rounded-lg text-xs">
+                              {benefit}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
 
                       <div>
                         <h4 className="font-bold text-amber-800 text-sm mb-2">{t.chooseSize}:</h4>
                         <div className="space-y-2">
                           {product.prices.map((price) => (
-                            <div key={price.id} className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors">
+                            <div
+                              key={price.id}
+                              className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
+                            >
                               <div>
                                 <span className="font-bold text-sm">{lang === "ar" ? price.sizeAr : price.sizeEn}</span>
                                 <span className="mx-2 text-gray-400">•</span>
-                                <span className="font-bold text-green-600">{price.price} {t.currency}</span>
+                                <span className="font-bold text-green-600">
+                                  {price.price} {t.currency}
+                                </span>
                               </div>
 
                               <button
@@ -879,7 +993,6 @@ Question: ${aiMessage}`,
                         </div>
                       </div>
                     </div>
-
                   </div>
                 ))}
               </div>
@@ -889,24 +1002,21 @@ Question: ${aiMessage}`,
 
         {/* ================= REVIEWS SECTION ================= */}
         <section className="bg-white rounded-2xl shadow-xl border border-amber-100 overflow-hidden">
-          <button onClick={() => { setOpenReviews(!openReviews); if (!openReviews) loadReviews(); }} className="w-full text-start p-5 md:p-6">
+          <button onClick={() => setOpenReviews(!openReviews)} className="w-full text-start p-5 md:p-6">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <span className="text-2xl">⭐</span>
-                  {approvedCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {approvedCount}
-                    </span>
-                  )}
+                  <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {approvedReviews.length}
+                  </span>
                 </div>
                 <div>
                   <h2 className="text-xl md:text-2xl font-black text-amber-900">{t.reviewsTitle}</h2>
                   <p className="text-sm text-gray-600">
                     {lang === "ar" ? "متوسط التقييم" : "Average rating"}:{" "}
-                    <span className="font-bold text-amber-600">{avgRating}/5</span>
-                    <span className="mx-2">•</span>
-                    <span className="font-bold text-gray-700">{approvedCount} {lang === "ar" ? "تقييم" : "reviews"}</span>
+                    <span className="font-bold text-amber-600">{avgRating}/5</span>{" "}
+                    • <span className="font-bold">{approvedReviews.length} {lang === "ar" ? "مقيم" : "ratings"}</span>
                   </p>
                 </div>
               </div>
@@ -945,7 +1055,9 @@ Question: ${aiMessage}`,
                           type="button"
                           key={star}
                           onClick={() => setNewReview({ ...newReview, rating: star })}
-                          className={`text-2xl md:text-3xl transition-all hover:scale-110 ${star <= newReview.rating ? "text-amber-500" : "text-gray-300"}`}
+                          className={`text-2xl md:text-3xl transition-all hover:scale-110 ${
+                            star <= newReview.rating ? "text-amber-500" : "text-gray-300"
+                          }`}
                         >
                           ⭐
                         </button>
@@ -984,75 +1096,72 @@ Question: ${aiMessage}`,
                 </form>
               )}
 
-              {isAdmin && approvedReviews.length > 0 && (
-                <div className="mb-4 p-4 bg-purple-50 rounded-xl border border-purple-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-purple-600">👑</span>
-                    <h3 className="font-bold text-purple-800">{lang === "ar" ? "إدارة التقييمات" : "Review Management"}</h3>
-                  </div>
-                  <div className="text-sm text-purple-700">{lang === "ar" ? "يمكنك استخدام الأزرار أسفل كل تقييم." : "Use buttons under each review."}</div>
-                </div>
-              )}
-
               <div className="space-y-4">
                 {isLoadingReviews ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto"></div>
                     <p className="mt-4 text-amber-700">{t.reviewLoading}</p>
                   </div>
-                ) : approvedCount === 0 ? (
+                ) : approvedReviews.length === 0 ? (
                   <div className="text-center py-8 bg-amber-50 rounded-xl border border-amber-200">
                     <p className="text-gray-500">{t.reviewEmpty}</p>
                   </div>
                 ) : (
-                  // ✅ SHOW ALL REVIEWS (no slice)
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {approvedReviews.map((review: any, index: number) => (
-                      <div key={review.id || index} className="bg-gradient-to-br from-white to-amber-50 p-4 rounded-xl shadow border border-amber-100 hover:shadow-md transition-shadow">
+                    {/* ✅ هنا بنعرض كل التقييمات */}
+                    {approvedReviews.map((review, index) => (
+                      <div
+                        key={review.id || index}
+                        className="bg-gradient-to-br from-white to-amber-50 p-4 rounded-xl shadow border border-amber-100 hover:shadow-md transition-shadow"
+                      >
                         <div className="flex justify-between items-start mb-3">
                           <div>
                             <div className="font-bold text-amber-900 text-sm md:text-base flex items-center gap-2">
-                              {review.name || review.ar?.name || review.en?.name}
-                              {review.approved && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✅</span>}
+                              {review.name}
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✅</span>
                             </div>
-                            {review.date && (
-                              <div className="text-xs text-gray-500">
-                                {new Date(review.date).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { year: "numeric", month: "short", day: "numeric" })}
-                                {review.updatedAt && <span className="text-xs text-blue-500 mr-2"> ✏️ {lang === "ar" ? "معدل" : "edited"}</span>}
-                              </div>
-                            )}
+                            <div className="text-xs text-gray-500">
+                              {new Date(review.createdAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                              {review.updatedAt && (
+                                <span className="text-xs text-blue-500 mr-2"> ✏️ {lang === "ar" ? "معدل" : "edited"}</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <div className="flex items-center gap-1 bg-amber-100 px-2 py-1 rounded-full">
-                              <span className="text-amber-700 font-bold text-sm md:text-base">{review.rating || 5}</span>
-                              <span className="text-lg text-amber-500">⭐</span>
-                            </div>
+                          <div className="flex items-center gap-1 bg-amber-100 px-2 py-1 rounded-full">
+                            <span className="text-amber-700 font-bold text-sm md:text-base">{review.rating}</span>
+                            <span className="text-lg text-amber-500">⭐</span>
                           </div>
                         </div>
 
-                        <p className="text-gray-700 text-sm leading-relaxed mb-3">
-                          {review.comment || (lang === "ar" ? review.ar?.comment : review.en?.comment) || review.ar?.comment || review.en?.comment}
-                        </p>
+                        <p className="text-gray-700 text-sm leading-relaxed mb-3">{review.comment}</p>
 
+                        {/* Admin Actions */}
                         {isAdmin && (
                           <div className="flex flex-wrap gap-2 pt-3 border-t border-amber-100">
-                            <button onClick={() => startEditReview(review)} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors">
+                            <button
+                              onClick={() => startEditReview(review)}
+                              className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors"
+                            >
                               ✏️ {lang === "ar" ? "تعديل" : "Edit"}
                             </button>
 
-                            <button onClick={() => deleteReview(review.id)} className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors">
+                            <button
+                              onClick={() => deleteReview(review.id)}
+                              className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
+                            >
                               🗑️ {lang === "ar" ? "حذف" : "Delete"}
                             </button>
 
-                            {!review.approved ? (
-                              <button onClick={() => approveReview(review.id)} className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors">
-                                ✅ {lang === "ar" ? "تفعيل" : "Approve"}
-                              </button>
-                            ) : (
-                              <button onClick={() => unapproveReview(review.id)} className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors">
-                                ⏸️ {lang === "ar" ? "إلغاء التفعيل" : "Unapprove"}
-                              </button>
-                            )}
+                            <button
+                              onClick={() => toggleApprove(review.id, false)}
+                              className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors"
+                            >
+                              ⏸️ {lang === "ar" ? "إخفاء" : "Hide"}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1060,7 +1169,6 @@ Question: ${aiMessage}`,
                   </div>
                 )}
               </div>
-
             </div>
           )}
         </section>
@@ -1111,15 +1219,30 @@ Question: ${aiMessage}`,
 
             <h3 className="text-xl font-black mb-2">بيت العسل | Honey House</h3>
             <p className="opacity-80 mb-6 text-sm md:text-base">
-              {lang === "ar" ? "عسل طبيعي 100% من المنحل مباشرة إلى منزلك في الإمارات" : "100% Natural honey delivered directly from the apiary to your home in UAE"}
+              {lang === "ar"
+                ? "عسل طبيعي 100% من المنحل مباشرة إلى منزلك في الإمارات"
+                : "100% Natural honey delivered directly from the apiary to your home in UAE"}
             </p>
 
             <div className="flex flex-wrap justify-center gap-3 mb-6">
-              <button onClick={() => setLang("ar")} className={`px-4 py-2 rounded-lg ${lang === "ar" ? "bg-amber-500" : "bg-amber-800"} hover:bg-amber-600 transition-colors text-sm`}>
+              <button
+                onClick={() => setLang("ar")}
+                className={`px-4 py-2 rounded-lg ${lang === "ar" ? "bg-amber-500" : "bg-amber-800"} hover:bg-amber-600 transition-colors text-sm`}
+              >
                 {t.arabic}
               </button>
-              <button onClick={() => setLang("en")} className={`px-4 py-2 rounded-lg ${lang === "en" ? "bg-amber-500" : "bg-amber-800"} hover:bg-amber-600 transition-colors text-sm`}>
+              <button
+                onClick={() => setLang("en")}
+                className={`px-4 py-2 rounded-lg ${lang === "en" ? "bg-amber-500" : "bg-amber-800"} hover:bg-amber-600 transition-colors text-sm`}
+              >
                 {t.english}
+              </button>
+
+              <button
+                onClick={() => (isAdmin ? handleAdminLogout() : setShowAdminLogin(true))}
+                className="px-4 py-2 rounded-lg bg-purple-700 hover:bg-purple-600 transition-colors text-sm font-bold"
+              >
+                {isAdmin ? (lang === "ar" ? "خروج ادمن" : "Admin Logout") : (lang === "ar" ? "دخول ادمن" : "Admin Login")}
               </button>
             </div>
 
@@ -1141,17 +1264,22 @@ Question: ${aiMessage}`,
         </div>
       </a>
 
-      {/* Styles */}
       <style jsx global>{`
         @import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap");
+
         .font-cairo { font-family: "Cairo", sans-serif; }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
         .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
         .line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-        @keyframes slide-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        @keyframes slide-in {
+          from { transform: translateY(-100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
         .animate-slide-in { animation: slide-in 0.3s ease-out; }
-        @media (max-width: 640px) { .container { padding-left: 1rem; padding-right: 1rem; } }
       `}</style>
     </div>
   );
