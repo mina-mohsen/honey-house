@@ -22,6 +22,25 @@ type Review = {
 
 const ADMIN_KEY_STORAGE = "honeyhouse_admin_key_v1";
 
+async function safeReadJson(res: Response) {
+  const contentType = res.headers.get("content-type") || "";
+  const text = await res.text();
+
+  // لو الرد مش JSON (غالبًا HTML 404 أو Error page)
+  if (!contentType.toLowerCase().includes("application/json")) {
+    const preview = text.slice(0, 200);
+    throw new Error(
+      `API did not return JSON. Status=${res.status}. Preview: ${preview}`
+    );
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Invalid JSON received. Status=${res.status}.`);
+  }
+}
+
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>("ar");
 
@@ -87,12 +106,17 @@ const App: React.FC = () => {
   const loadReviews = async () => {
     setIsLoadingReviews(true);
     try {
-      const res = await fetch("/api/reviews");
-      const data = await res.json();
+      const res = await fetch("/api/reviews", { method: "GET" });
+      const data = await safeReadJson(res);
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to load reviews");
+      }
+
       const list: Review[] = Array.isArray(data?.reviews) ? data.reviews : [];
       setReviews(list);
-    } catch {
-      // fallback فقط لو الـ API وقع
+    } catch (e: any) {
+      // fallback لو الـ API وقع
       const fallback: Review[] = (MOCK_REVIEWS || []).map((r: any, idx: number) => ({
         id: r.id || `mock_${idx}`,
         name: (r.name || r?.ar?.name || r?.en?.name || "Customer") as string,
@@ -103,6 +127,9 @@ const App: React.FC = () => {
         approved: r.approved ?? true,
       }));
       setReviews(fallback);
+
+      // رسالة أوضح بدل alert مزعج
+      console.error("Reviews API error:", e?.message || e);
     } finally {
       setIsLoadingReviews(false);
     }
@@ -192,8 +219,10 @@ const App: React.FC = () => {
           },
         }),
       });
-      const data = await res.json();
+
+      const data = await safeReadJson(res);
       if (!res.ok) throw new Error(data?.error || "Update failed");
+
       setShowEditForm(false);
       setEditingReview(null);
       setAdminMessage(lang === "ar" ? "تم تعديل التقييم ✅" : "Review updated ✅");
@@ -215,8 +244,10 @@ const App: React.FC = () => {
         },
         body: JSON.stringify({ id }),
       });
-      const data = await res.json();
+
+      const data = await safeReadJson(res);
       if (!res.ok) throw new Error(data?.error || "Delete failed");
+
       setAdminMessage(lang === "ar" ? "تم حذف التقييم ✅" : "Review deleted ✅");
       setTimeout(() => setAdminMessage(""), 2500);
       loadReviews();
@@ -235,8 +266,10 @@ const App: React.FC = () => {
         },
         body: JSON.stringify({ id, patch: { approved } }),
       });
-      const data = await res.json();
+
+      const data = await safeReadJson(res);
       if (!res.ok) throw new Error(data?.error || "Update failed");
+
       loadReviews();
     } catch (e: any) {
       alert((lang === "ar" ? "فشل التعديل: " : "Failed: ") + (e?.message || ""));
@@ -346,7 +379,7 @@ const App: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
+      const data = await safeReadJson(res);
       setAiResponse(data.reply || "");
     } catch {
       setAiResponse(lang === "ar" ? "خطأ في الاتصال بالذكاء الاصطناعي." : "Error connecting to AI.");
@@ -376,7 +409,7 @@ const App: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
+      const data = await safeReadJson(res);
       if (!res.ok) throw new Error(data?.error || "Failed to submit");
 
       setShowReviewForm(false);
@@ -1108,7 +1141,7 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* ✅ هنا بنعرض كل التقييمات */}
+                    {/* ✅ عرض كل التقييمات */}
                     {approvedReviews.map((review, index) => (
                       <div
                         key={review.id || index}
