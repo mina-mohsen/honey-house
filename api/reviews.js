@@ -1,41 +1,155 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { kv } from "@vercel/kv";
+/**
+ * /api/reviews
+ * Storage: Vercel KV (Upstash)
+ *
+ * Required env:
+ * - KV_URL, KV_REST_API_URL, KV_REST_API_TOKEN, KV_REST_API_READ_ONLY_TOKEN
+ * - ADMIN_REVIEW_KEY   (secret for admin actions)
+ *
+ * Install:
+ *   npm i @vercel/kv
+ */
 
-const KEY = "honeyhouse:reviews:v1";
+const { kv } = require("@vercel/kv");
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+const REVIEWS_KEY = "honeyhouse:reviews:v1";
+
+// لو عايز تسيّد 6 تقييمات افتراضيين لأول مرة فقط:
+// حطهم هنا. لو KV فيها بيانات، مش هيعمل overwrite.
+const SEED = []; // <- ممكن تحط MOCK_REVIEWS هنا لو تحب
+
+function json(res, status, data) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(data));
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function isAdmin(req) {
+  const key = (req.headers["x-admin-key"] || "").toString().trim();
+  const expected = (process.env.ADMIN_REVIEW_KEY || "").trim();
+  return !!expected && key && key === expected;
+}
+
+async function readBody(req) {
+  return await new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk) => (data += chunk));
+    req.on("end", () => {
+      if (!data) return resolve({});
+      try {
+        resolve(JSON.parse(data));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+async function getOrInit() {
+  const existing = await kv.get(REVIEWS_KEY);
+  if (Array.isArray(existing)) return existing;
+
+  const initial = Array.isArray(SEED) ? SEED : [];
+  await kv.set(REVIEWS_KEY, initial);
+  return initial;
+}
+
+module.exports = async (req, res) => {
   try {
-    if (req.method === "GET") {
-      const list = (await kv.get<any[]>(KEY)) || [];
-      return res.status(200).json({ ok: true, reviews: list });
+    const method = (req.method || "GET").toUpperCase();
+
+    if (method === "GET") {
+      const list = await getOrInit();
+      const sorted = [...list].sort((a, b) =>
+        (b.createdAt || "").localeCompare(a.createdAt || "")
+      );
+      return json(res, 200, { ok: true, reviews: sorted });
     }
 
-    if (req.method === "POST") {
-      const body = req.body || {};
-      const current = (await kv.get<any[]>(KEY)) || [];
+    if (method === "POST") {
+      const body = await readBody(req);
+
+      const name = (body.name || "").toString().trim();
+      const comment = (body.comment || "").toString().trim();
+      const rating = Math.max(1, Math.min(5, Number(body.rating || 5)));
+      const lang = (body.lang || "ar").toString() === "en" ? "en" : "ar";
+
+      if (!name || !comment)
+        return json(res, 400, { ok: false, error: "Missing name or comment" });
+
+      const list = await getOrInit();
 
       const review = {
-        id: body.id || `review_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        name: String(body.name || "").trim(),
-        rating: Number(body.rating || 5),
-        comment: String(body.comment || "").trim(),
-        lang: body.lang === "en" ? "en" : "ar",
-        createdAt: body.createdAt || new Date().toISOString(),
-        approved: body.approved !== false, // default true
+        id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        name,
+        rating,
+        comment,
+        lang,
+        createdAt: nowIso(),
+        approved: true,
       };
 
-      if (!review.name || !review.comment) {
-        return res.status(400).json({ ok: false, error: "Missing name/comment" });
-      }
-
-      const updated = [review, ...current];
-      await kv.set(KEY, updated);
-
-      return res.status(200).json({ ok: true, review, reviews: updated });
+      const updated = [review, ...list];
+      await kv.set(REVIEWS_KEY, updated);
+      return json(res, 200, { ok: true, review });
     }
 
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  } catch (e: any) {
-    return res.status(500).json({ ok: false, error: e?.message || "Server error" });
+    if (method === "PUT") {
+      if (!isAdmin(req))
+        return json(res, 401, { ok: false, error: "Unauthorized" });
+
+      const body = await readBody(req);
+      const id = (body.id || "").toString();
+      const patch = body.patch || {};
+      if (!id) return json(res, 400, { ok: false, error: "Missing id" });
+
+      const list = await getOrInit();
+
+      const updated = list.map((r) => {
+        if (r.id !== id) return r;
+        return {
+          ...r,
+          ...(typeof patch.name === "string" ? { name: patch.name.trim() } : {}),
+          ...(typeof patch.comment === "string"
+            ? { comment: patch.comment.trim() }
+            : {}),
+          ...(patch.rating
+            ? { rating: Math.max(1, Math.min(5, Number(patch.rating))) }
+            : {}),
+          ...(typeof patch.approved === "boolean" ? { approved: patch.approved } : {}),
+          updatedAt: nowIso(),
+        };
+      });
+
+      await kv.set(REVIEWS_KEY, updated);
+      return json(res, 200, { ok: true });
+    }
+
+    if (method === "DELETE") {
+      if (!isAdmin(req))
+        return json(res, 401, { ok: false, error: "Unauthorized" });
+
+      const body = await readBody(req);
+      const id = (body.id || "").toString();
+      if (!id) return json(res, 400, { ok: false, error: "Missing id" });
+
+      const list = await getOrInit();
+      const updated = list.filter((r) => r.id !== id);
+      await kv.set(REVIEWS_KEY, updated);
+      return json(res, 200, { ok: true });
+    }
+
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  } catch (e) {
+    return json(res, 500, {
+      ok: false,
+      error: "Server error",
+      details: String(e && e.message ? e.message : e),
+    });
   }
-}
+};
