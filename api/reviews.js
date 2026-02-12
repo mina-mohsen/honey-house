@@ -3,7 +3,7 @@
  * Storage: Vercel KV (Upstash)
  *
  * Required env:
- * - KV_URL, KV_REST_API_URL, KV_REST_API_TOKEN, KV_REST_API_READ_ONLY_TOKEN
+ * - KV_URL, KV_REST_API_URL, KV_REST_API_TOKEN, KV_REST_API_READ_ONLY_TOKEN (Vercel KV)
  * - ADMIN_REVIEW_KEY   (secret for admin actions)
  *
  * Install:
@@ -14,13 +14,14 @@ const { kv } = require("@vercel/kv");
 
 const REVIEWS_KEY = "honeyhouse:reviews:v1";
 
-// لو عايز تسيّد 6 تقييمات افتراضيين لأول مرة فقط:
-// حطهم هنا. لو KV فيها بيانات، مش هيعمل overwrite.
-const SEED = []; // <- ممكن تحط MOCK_REVIEWS هنا لو تحب
+// ✅ Seed أول مرة فقط (لو KV فاضية)
+const SEED = []; // لو عايز تبدأ بـ 6 تقييمات حطهم هنا
 
 function json(res, status, data) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  // منع الكاش على API
+  res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(data));
 }
 
@@ -31,7 +32,7 @@ function nowIso() {
 function isAdmin(req) {
   const key = (req.headers["x-admin-key"] || "").toString().trim();
   const expected = (process.env.ADMIN_REVIEW_KEY || "").trim();
-  return !!expected && key && key === expected;
+  return !!expected && !!key && key === expected;
 }
 
 async function readBody(req) {
@@ -43,7 +44,7 @@ async function readBody(req) {
       try {
         resolve(JSON.parse(data));
       } catch (e) {
-        reject(e);
+        reject(new Error("Invalid JSON body"));
       }
     });
     req.on("error", reject);
@@ -79,8 +80,9 @@ module.exports = async (req, res) => {
       const rating = Math.max(1, Math.min(5, Number(body.rating || 5)));
       const lang = (body.lang || "ar").toString() === "en" ? "en" : "ar";
 
-      if (!name || !comment)
+      if (!name || !comment) {
         return json(res, 400, { ok: false, error: "Missing name or comment" });
+      }
 
       const list = await getOrInit();
 
@@ -100,8 +102,7 @@ module.exports = async (req, res) => {
     }
 
     if (method === "PUT") {
-      if (!isAdmin(req))
-        return json(res, 401, { ok: false, error: "Unauthorized" });
+      if (!isAdmin(req)) return json(res, 401, { ok: false, error: "Unauthorized" });
 
       const body = await readBody(req);
       const id = (body.id || "").toString();
@@ -115,12 +116,8 @@ module.exports = async (req, res) => {
         return {
           ...r,
           ...(typeof patch.name === "string" ? { name: patch.name.trim() } : {}),
-          ...(typeof patch.comment === "string"
-            ? { comment: patch.comment.trim() }
-            : {}),
-          ...(patch.rating
-            ? { rating: Math.max(1, Math.min(5, Number(patch.rating))) }
-            : {}),
+          ...(typeof patch.comment === "string" ? { comment: patch.comment.trim() } : {}),
+          ...(patch.rating ? { rating: Math.max(1, Math.min(5, Number(patch.rating))) } : {}),
           ...(typeof patch.approved === "boolean" ? { approved: patch.approved } : {}),
           updatedAt: nowIso(),
         };
@@ -131,8 +128,7 @@ module.exports = async (req, res) => {
     }
 
     if (method === "DELETE") {
-      if (!isAdmin(req))
-        return json(res, 401, { ok: false, error: "Unauthorized" });
+      if (!isAdmin(req)) return json(res, 401, { ok: false, error: "Unauthorized" });
 
       const body = await readBody(req);
       const id = (body.id || "").toString();
