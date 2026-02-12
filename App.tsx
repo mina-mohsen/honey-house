@@ -44,11 +44,11 @@ async function safeReadJson(res: Response) {
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>("ar");
 
-  /* ================= Admin ================= */
+  /* ================= Admin ================= 
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminKeyInput, setAdminKeyInput] = useState("");
-  const [adminMessage, setAdminMessage] = useState("");
+  const [adminMessage, setAdminMessage] = useState("");*/
 
   /* ================= Cart / Order ================= */
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -89,7 +89,7 @@ const App: React.FC = () => {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  /* Load admin key */
+  /* Load admin key 
   useEffect(() => {
     const savedKey =
       sessionStorage.getItem(ADMIN_KEY_STORAGE) ||
@@ -100,7 +100,7 @@ const App: React.FC = () => {
   const getAdminKey = () =>
     sessionStorage.getItem(ADMIN_KEY_STORAGE) ||
     localStorage.getItem(ADMIN_KEY_STORAGE) ||
-    "";
+    "";*/
 
   /* Load reviews from KV */
   const loadReviews = async () => {
@@ -168,7 +168,7 @@ const App: React.FC = () => {
     return (sum / approvedReviews.length).toFixed(1);
   }, [approvedReviews]);
 
-  /* ================= Admin ================= */
+  /* ================= Admin ================= 
   const handleAdminLogin = () => {
     if (!adminKeyInput.trim()) {
       setAdminMessage(lang === "ar" ? "اكتب كود الادمن" : "Enter admin key");
@@ -274,7 +274,7 @@ const App: React.FC = () => {
     } catch (e: any) {
       alert((lang === "ar" ? "فشل التعديل: " : "Failed: ") + (e?.message || ""));
     }
-  };
+  };*/
 
   /* ================= Cart ================= */
   const addToCart = (productId: string, priceId: string, productName: string, sizeName: string) => {
@@ -424,7 +424,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white text-slate-900 font-cairo">
-      {/* ================= ADMIN MESSAGE ================= */}
+      {/* ================= ADMIN MESSAGE ================= 
       {adminMessage && (
         <div className="fixed top-20 right-4 left-4 md:left-auto md:right-4 z-50 animate-slide-in">
           <div className="bg-blue-500 text-white p-4 rounded-xl shadow-2xl flex items-center gap-3 max-w-md mx-auto">
@@ -434,7 +434,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )}*/}
 
       {/* ================= CART NOTIFICATION TOAST ================= */}
       {showCartNotification && (
@@ -449,7 +449,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* ================= ADMIN LOGIN MODAL ================= */}
+      {/* ================= ADMIN LOGIN MODAL ================= 
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
@@ -489,7 +489,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )}*/}
 
       {/* ================= EDIT REVIEW MODAL ================= */}
       {showEditForm && editingReview && (
@@ -561,7 +561,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )}*/}
 
       {/* ================= PROMO BANNER ================= */}
       <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 text-white text-center py-3 font-black text-sm md:text-base relative overflow-hidden">
@@ -687,13 +687,13 @@ const App: React.FC = () => {
               <span>{lang === "ar" ? "واتساب" : "WhatsApp"}</span>
             </a>
 
-            <button
+            {/* <button
               onClick={() => setShowAdminLogin(true)}
               className="hidden md:inline-flex px-4 py-2.5 bg-purple-100 text-purple-800 rounded-full font-black whitespace-nowrap items-center gap-2 hover:bg-purple-200 text-sm"
               title="Admin"
             >
               👑 Admin
-            </button>
+            </button>*/}
           </nav>
         </div>
       </header>
@@ -1271,12 +1271,12 @@ const App: React.FC = () => {
                 {t.english}
               </button>
 
-              <button
+              {/* <button
                 onClick={() => (isAdmin ? handleAdminLogout() : setShowAdminLogin(true))}
                 className="px-4 py-2 rounded-lg bg-purple-700 hover:bg-purple-600 transition-colors text-sm font-bold"
               >
                 {isAdmin ? (lang === "ar" ? "خروج ادمن" : "Admin Logout") : (lang === "ar" ? "دخول ادمن" : "Admin Login")}
-              </button>
+              </button>*/}
             </div>
 
             <p className="text-sm opacity-60">© {new Date().getFullYear()} بيت العسل. {t.copyright}.</p>
